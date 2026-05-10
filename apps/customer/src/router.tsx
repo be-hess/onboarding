@@ -1,9 +1,18 @@
 import { createBrowserRouter } from 'react-router-dom'
+import {
+  StartApplication,
+  BusinessDetails,
+  Shareholders,
+  DocumentUpload,
+  ReviewSubmit,
+  ApplicationStatus,
+} from './pages'
 
-// Pages to be implemented in later phases
 export const router = createBrowserRouter([
-  // { path: '/', element: <ApplicationStart /> },
-  // { path: '/application/:id/status', element: <ApplicationStatus /> },
-  // { path: '/application/:id/reask', element: <ReAskResponse /> },
-  // { path: '/signatory/:token', element: <SignatoryVerification /> },
+  { path: '/', element: <StartApplication /> },
+  { path: '/application/business', element: <BusinessDetails /> },
+  { path: '/application/shareholders', element: <Shareholders /> },
+  { path: '/application/documents', element: <DocumentUpload /> },
+  { path: '/application/review', element: <ReviewSubmit /> },
+  { path: '/application/status', element: <ApplicationStatus /> },
 ])

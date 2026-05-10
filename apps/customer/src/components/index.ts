@@ -1,1 +1,1 @@
-// App-specific components (non-design-system)
+export { ApplicationLayout } from './ApplicationLayout'

@@ -1,5 +1,6 @@
-// Pages to be added:
-// ApplicationStart   — document-first entry, TL scan + pre-fill
-// ApplicationStatus  — per-pillar progress tracker
-// ReAskResponse      — targeted re-ask response portal
-// SignatoryVerification — self-serve signatory KYC flow
+export { StartApplication } from './StartApplication'
+export { BusinessDetails } from './BusinessDetails'
+export { Shareholders } from './Shareholders'
+export { DocumentUpload } from './DocumentUpload'
+export { ReviewSubmit } from './ReviewSubmit'
+export { ApplicationStatus } from './ApplicationStatus'

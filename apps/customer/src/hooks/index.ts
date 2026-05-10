@@ -1,1 +1,1 @@
-// Custom hooks
+export { useApplication } from './useApplication'

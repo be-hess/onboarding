@@ -1,1 +1,1 @@
-// Applicant API client
+export { scanTradeLicense, submitApplication, watchPillarProgress } from './mockApi'
