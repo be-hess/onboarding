@@ -1,8 +1,10 @@
 import { createBrowserRouter } from 'react-router-dom'
 import {
   StartApplication,
-  BusinessDetails,
-  Shareholders,
+  LicenseDetails,
+  BusinessActivities,
+  OwnershipStructure,
+  BusinessModel,
   DocumentUpload,
   ReviewSubmit,
   ApplicationStatus,
@@ -10,8 +12,10 @@ import {
 
 export const router = createBrowserRouter([
   { path: '/', element: <StartApplication /> },
-  { path: '/application/business', element: <BusinessDetails /> },
-  { path: '/application/shareholders', element: <Shareholders /> },
+  { path: '/application/license', element: <LicenseDetails /> },
+  { path: '/application/activities', element: <BusinessActivities /> },
+  { path: '/application/ownership', element: <OwnershipStructure /> },
+  { path: '/application/business-model', element: <BusinessModel /> },
   { path: '/application/documents', element: <DocumentUpload /> },
   { path: '/application/review', element: <ReviewSubmit /> },
   { path: '/application/status', element: <ApplicationStatus /> },

@@ -45,7 +45,7 @@ export function StartApplication() {
 
     if (!state.error) {
       if (moaFile) handleMoaUpload(moaFile.name)
-      goTo('business')
+      goTo('license')
     }
   }
 

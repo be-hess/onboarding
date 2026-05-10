@@ -3,19 +3,22 @@ import { StepProgress } from '@wio/design-system/src/components'
 import type { WizardStep } from '../store/types'
 
 const STEPS = [
-  { label: 'Business', sublabel: 'Details' },
-  { label: 'Shareholders', sublabel: '& Signatories' },
+  { label: 'License', sublabel: 'Details' },
+  { label: 'Activities', sublabel: '& Model' },
+  { label: 'Ownership', sublabel: 'Structure' },
   { label: 'Documents', sublabel: 'Upload' },
   { label: 'Review', sublabel: '& Submit' },
 ]
 
 const STEP_INDEX: Record<WizardStep, number> = {
   start: -1,
-  business: 0,
-  shareholders: 1,
-  documents: 2,
-  review: 3,
-  status: 4,
+  license: 0,
+  activities: 1,
+  ownership: 2,
+  'business-model': 2,
+  documents: 3,
+  review: 4,
+  status: 5,
 }
 
 interface ApplicationLayoutProps {

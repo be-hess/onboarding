@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router-dom'
 import { useApplicationContext } from '../store'
-import { scanDocument, submitApplication, watchPillarProgress } from '../services'
+import { scanDocument, generateBusinessModelSummary, submitApplication, watchPillarProgress } from '../services'
 import type { WizardStep, DocumentKind } from '../store/types'
 
 const STEP_ROUTES: Record<WizardStep, string> = {
   start: '/',
-  business: '/application/business',
-  shareholders: '/application/shareholders',
+  license: '/application/license',
+  activities: '/application/activities',
+  ownership: '/application/ownership',
+  'business-model': '/application/business-model',
   documents: '/application/documents',
   review: '/application/review',
   status: '/application/status',
@@ -21,7 +23,6 @@ export function useApplication() {
     navigate(STEP_ROUTES[step])
   }
 
-  // Returns requiresMoa so the start screen can decide whether to show the MOA step
   async function handleDocumentScan(file: File | undefined, documentKind: DocumentKind): Promise<{ requiresMoa: boolean }> {
     dispatch({ type: 'SET_DOCUMENT_KIND', documentKind })
     dispatch({ type: 'SET_TL_SCANNED' })
@@ -29,7 +30,6 @@ export function useApplication() {
     try {
       const { business, tier, requiresMoa } = await scanDocument(file, documentKind)
       dispatch({ type: 'SET_EXTRACTED_BUSINESS', business, tier, requiresMoa })
-      // Map extracted owners to shareholders
       business.owners.forEach((owner, i) => {
         dispatch({
           type: 'ADD_SHAREHOLDER',
@@ -54,6 +54,22 @@ export function useApplication() {
     dispatch({ type: 'UPDATE_DOCUMENT_STATUS', id: 'moa', status: 'uploaded', fileName })
   }
 
+  // Called when entering the Business Model screen — generates the AI summary if not already done
+  async function loadBusinessModelSummary() {
+    if (!state.business || state.businessModelSummary || state.businessModelLoading) return
+    dispatch({ type: 'SET_BUSINESS_MODEL_LOADING', loading: true })
+    try {
+      const summary = await generateBusinessModelSummary(
+        state.business,
+        state.activities,
+        state.primaryActivityIndex
+      )
+      dispatch({ type: 'SET_BUSINESS_MODEL_SUMMARY', summary })
+    } catch {
+      dispatch({ type: 'SET_BUSINESS_MODEL_LOADING', loading: false })
+    }
+  }
+
   async function handleSubmit() {
     dispatch({ type: 'SET_SUBMITTING', submitting: true })
     try {
@@ -71,10 +87,16 @@ export function useApplication() {
     const gen = watchPillarProgress(applicationId, (id, pillarState) => {
       dispatch({ type: 'SET_PILLAR_STATE', id, state: pillarState })
     })
-    for await (const _ of gen) {
-      // each yield triggers the onUpdate callback
-    }
+    for await (const _ of gen) { /* each yield triggers onUpdate */ }
   }
 
-  return { state, dispatch, goTo, handleDocumentScan, handleMoaUpload, handleSubmit }
+  return {
+    state,
+    dispatch,
+    goTo,
+    handleDocumentScan,
+    handleMoaUpload,
+    loadBusinessModelSummary,
+    handleSubmit,
+  }
 }

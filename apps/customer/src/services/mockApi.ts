@@ -21,6 +21,7 @@ const MOCK_BUSINESS_LICENSE: ScanResult = {
     commercialActivities: [
       'General Trading',
       'Import and Export of Consumer Goods',
+      'Wholesale of Household Products',
     ],
     owners: [
       { name: 'Ahmed Al Mansoori', ownership: 60, nationality: 'UAE National' },
@@ -48,19 +49,46 @@ const MOCK_FREELANCER_PERMIT: ScanResult = {
   },
 }
 
-// Scans either a business license or freelancer permit
 export async function scanDocument(_file: File | undefined, documentKind: DocumentKind): Promise<ScanResult> {
   await delay(2800)
   return documentKind === 'business_license' ? MOCK_BUSINESS_LICENSE : MOCK_FREELANCER_PERMIT
 }
 
-// Simulates application submission
+// Generates an AI business model summary from the extracted document data + activities
+export async function generateBusinessModelSummary(
+  business: ExtractedBusiness,
+  activities: string[],
+  primaryIndex: number
+): Promise<string> {
+  await delay(1800)
+
+  const primary = activities[primaryIndex] ?? activities[0] ?? 'trading'
+  const others = activities.filter((_, i) => i !== primaryIndex)
+
+  if (business.documentKind === 'freelancer_permit') {
+    return (
+      `${business.tradeName} operates as a freelance professional licensed by ${business.licensingAuthority}. ` +
+      `The primary service offering is ${primary.toLowerCase()}` +
+      (others.length > 0 ? `, with additional services in ${others.map(a => a.toLowerCase()).join(' and ')}` : '') +
+      `. As a sole operator, the business model is service-based with direct client engagements and project-based or retainer revenue. No corporate structure or co-investors are involved.`
+    )
+  }
+
+  return (
+    `${business.tradeName} is a ${business.legalType} licensed by ${business.licensingAuthority}, ` +
+    `with ${business.owners.length} shareholder${business.owners.length > 1 ? 's' : ''}. ` +
+    `The primary business activity is ${primary.toLowerCase()}` +
+    (others.length > 0 ? `, supported by ${others.map(a => a.toLowerCase()).join(' and ')}` : '') +
+    `. The business operates from ${business.registeredAddress}. ` +
+    `Revenue is generated through commercial trade, with goods-based transactions as the core model.`
+  )
+}
+
 export async function submitApplication(_payload: unknown): Promise<{ applicationId: string }> {
   await delay(1500)
   return { applicationId: `APP-${Date.now().toString(36).toUpperCase()}` }
 }
 
-// Simulates async pillar processing — yields per-pillar updates over ~10s
 export async function* watchPillarProgress(
   _applicationId: string,
   onUpdate: (id: string, state: Partial<PillarState>) => void

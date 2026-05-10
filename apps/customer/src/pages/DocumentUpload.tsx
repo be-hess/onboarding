@@ -104,7 +104,7 @@ export function DocumentUpload() {
       )}
 
       <div className="form-actions">
-        <Button variant="ghost" onClick={() => goTo('shareholders')}>Back</Button>
+        <Button variant="ghost" onClick={() => goTo('ownership')}>Back</Button>
         <Button onClick={() => goTo('review')} disabled={!allRequiredUploaded}>
           Review & Submit
         </Button>

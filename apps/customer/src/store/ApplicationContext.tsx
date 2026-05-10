@@ -2,7 +2,6 @@ import { createContext, useContext, useReducer } from 'react'
 import type { ReactNode } from 'react'
 import type { ApplicationState, ApplicationAction, DocumentSlot, PillarState } from './types'
 
-// Document slots common to all application types
 const BASE_DOCUMENTS: DocumentSlot[] = [
   { id: 'trade_license', name: 'Trade License / Freelancer Permit', description: 'Scanned in the previous step', required: true, status: 'uploaded' },
   { id: 'emirates_id', name: 'Emirates ID (Owner)', description: 'Front and back of Emirates ID', required: true, status: 'pending' },
@@ -34,11 +33,13 @@ const INITIAL_STATE: ApplicationState = {
   requiresMoa: false,
   tlScanned: false,
   business: null,
-  expectedActivities: '',
+  activities: [],
+  primaryActivityIndex: 0,
+  businessModelSummary: null,
+  businessModelLoading: false,
   expectedMonthlyTurnover: '',
-  expectedCounterparties: '',
+  countriesOfOperation: '',
   shareholders: [],
-  // Documents are empty until the scan completes — avoids showing stale slots
   documents: [],
   pillars: INITIAL_PILLARS,
   submitting: false,
@@ -46,36 +47,90 @@ const INITIAL_STATE: ApplicationState = {
   error: null,
 }
 
-function buildDocumentList(requiresMoa: boolean, moaStatus: DocumentSlot['status'] = 'pending', moaFileName?: string): DocumentSlot[] {
+function buildDocumentList(requiresMoa: boolean): DocumentSlot[] {
   if (!requiresMoa) return BASE_DOCUMENTS
-  const moaSlot: DocumentSlot = { ...MOA_SLOT, status: moaStatus, fileName: moaFileName }
-  // Insert MOA right after trade license
-  return [BASE_DOCUMENTS[0], moaSlot, ...BASE_DOCUMENTS.slice(1)]
+  return [BASE_DOCUMENTS[0], { ...MOA_SLOT }, ...BASE_DOCUMENTS.slice(1)]
 }
 
 function reducer(state: ApplicationState, action: ApplicationAction): ApplicationState {
   switch (action.type) {
     case 'SET_STEP':
       return { ...state, step: action.step }
+
     case 'SET_DOCUMENT_KIND':
       return { ...state, documentKind: action.documentKind }
+
     case 'SET_TL_SCANNED':
       return { ...state, tlScanned: true }
+
     case 'SET_EXTRACTED_BUSINESS':
       return {
         ...state,
         business: action.business,
         tier: action.tier,
         requiresMoa: action.requiresMoa,
+        activities: [...action.business.commercialActivities],
+        primaryActivityIndex: 0,
         documents: buildDocumentList(action.requiresMoa),
       }
+
     case 'UPDATE_BUSINESS_FIELD':
       if (!state.business) return state
       return { ...state, business: { ...state.business, [action.field]: action.value } }
-    case 'UPDATE_ACTIVITY_QUESTIONS':
-      return { ...state, [action.field]: action.value }
+
+    // ── Activity actions ────────────────────────────────────────────
+    case 'SET_PRIMARY_ACTIVITY':
+      return { ...state, primaryActivityIndex: action.index }
+
+    case 'UPDATE_ACTIVITY': {
+      const updated = [...state.activities]
+      updated[action.index] = action.value
+      return { ...state, activities: updated }
+    }
+
+    case 'ADD_ACTIVITY':
+      return { ...state, activities: [...state.activities, action.activity] }
+
+    case 'REMOVE_ACTIVITY': {
+      const filtered = state.activities.filter((_, i) => i !== action.index)
+      const newPrimary = state.primaryActivityIndex >= filtered.length
+        ? Math.max(0, filtered.length - 1)
+        : action.index < state.primaryActivityIndex
+          ? state.primaryActivityIndex - 1
+          : state.primaryActivityIndex === action.index
+            ? 0
+            : state.primaryActivityIndex
+      return { ...state, activities: filtered, primaryActivityIndex: newPrimary }
+    }
+
+    // ── Business model actions ──────────────────────────────────────
+    case 'SET_BUSINESS_MODEL_LOADING':
+      return { ...state, businessModelLoading: action.loading }
+
+    case 'SET_BUSINESS_MODEL_SUMMARY':
+      return { ...state, businessModelSummary: action.summary, businessModelLoading: false }
+
+    case 'UPDATE_BUSINESS_MODEL_SUMMARY':
+      return { ...state, businessModelSummary: action.summary }
+
+    case 'UPDATE_TURNOVER':
+      return { ...state, expectedMonthlyTurnover: action.value }
+
+    case 'UPDATE_COUNTRIES':
+      return { ...state, countriesOfOperation: action.value }
+
+    // ── Shareholder actions ─────────────────────────────────────────
     case 'ADD_SHAREHOLDER':
       return { ...state, shareholders: [...state.shareholders, action.shareholder] }
+
+    case 'UPDATE_SHAREHOLDER':
+      return {
+        ...state,
+        shareholders: state.shareholders.map(s =>
+          s.id === action.id ? { ...s, ...action.updates } : s
+        ),
+      }
+
     case 'UPDATE_SHAREHOLDER_STATUS':
       return {
         ...state,
@@ -83,6 +138,11 @@ function reducer(state: ApplicationState, action: ApplicationAction): Applicatio
           s.id === action.id ? { ...s, kycStatus: action.status } : s
         ),
       }
+
+    case 'REMOVE_SHAREHOLDER':
+      return { ...state, shareholders: state.shareholders.filter(s => s.id !== action.id) }
+
+    // ── Document actions ────────────────────────────────────────────
     case 'UPDATE_DOCUMENT_STATUS':
       return {
         ...state,
@@ -90,10 +150,13 @@ function reducer(state: ApplicationState, action: ApplicationAction): Applicatio
           d.id === action.id ? { ...d, status: action.status, fileName: action.fileName ?? d.fileName } : d
         ),
       }
+
     case 'SET_SUBMITTING':
       return { ...state, submitting: action.submitting }
+
     case 'SET_SUBMITTED':
       return { ...state, submitted: true, submitting: false, applicationId: action.applicationId }
+
     case 'SET_PILLAR_STATE':
       return {
         ...state,
@@ -101,8 +164,10 @@ function reducer(state: ApplicationState, action: ApplicationAction): Applicatio
           p.id === action.id ? { ...p, ...action.state } : p
         ),
       }
+
     case 'SET_ERROR':
       return { ...state, error: action.error }
+
     default:
       return state
   }

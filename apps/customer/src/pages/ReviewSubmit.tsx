@@ -25,7 +25,7 @@ export function ReviewSubmit() {
       <div className="review-panel" style={{ marginBottom: 16 }}>
         <div className="review-panel__header">
           <span>Business Details</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => goTo('business')}>Edit</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => goTo('license')}>Edit</button>
         </div>
         <div className="check-row">
           <span className="check-row__label">Trade Name</span>
@@ -59,7 +59,7 @@ export function ReviewSubmit() {
       <div className="review-panel" style={{ marginBottom: 16 }}>
         <div className="review-panel__header">
           <span>Shareholders & Signatories ({shareholders.length})</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => goTo('shareholders')}>Edit</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => goTo('ownership')}>Edit</button>
         </div>
         {shareholders.map(person => (
           <div key={person.id} className="check-row">
