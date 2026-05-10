@@ -3,22 +3,7 @@ import { Button, Spinner } from '@wio/design-system/src/components'
 import { useApplication } from '../hooks'
 import type { DocumentKind } from '../store/types'
 
-type StartPhase = 'type-select' | 'upload' | 'scanning' | 'moa-upload'
-
-const KIND_CONFIG: Record<DocumentKind, { label: string; scanLabel: string; icon: string; description: string }> = {
-  business_license: {
-    label: 'Business License',
-    scanLabel: 'Trade License / Business License',
-    icon: '🏢',
-    description: 'For LLCs, sole establishments, free zone companies, and branches',
-  },
-  freelancer_permit: {
-    label: 'Freelancer Permit',
-    icon: '🧑‍💻',
-    scanLabel: 'Freelancer Permit',
-    description: 'For individuals operating under a freelance or professional license',
-  },
-}
+type StartPhase = 'type-select' | 'upload'
 
 const SCAN_PHASES = [
   'Checking document validity…',
@@ -27,67 +12,45 @@ const SCAN_PHASES = [
 ]
 
 export function StartApplication() {
-  const { state, goTo, handleDocumentScan, handleMoaUpload, skipMoa } = useApplication()
+  const { state, goTo, handleDocumentScan, handleMoaUpload } = useApplication()
   const [phase, setPhase] = useState<StartPhase>('type-select')
   const [selectedKind, setSelectedKind] = useState<DocumentKind | null>(null)
+  const [scanning, setScanning] = useState(false)
   const [scanPhaseLabel, setScanPhaseLabel] = useState(SCAN_PHASES[0])
+  const [tlFile, setTlFile] = useState<File | null>(null)
   const [moaFile, setMoaFile] = useState<File | null>(null)
-  const docFileRef = useRef<HTMLInputElement>(null)
-  const moaFileRef = useRef<HTMLInputElement>(null)
+
+  const tlRef = useRef<HTMLInputElement>(null)
+  const moaRef = useRef<HTMLInputElement>(null)
 
   function selectKind(kind: DocumentKind) {
     setSelectedKind(kind)
+    setTlFile(null)
+    setMoaFile(null)
     setPhase('upload')
   }
 
-  async function startScan(file?: File) {
+  async function startScan(demoMode = false) {
     if (!selectedKind) return
-    setPhase('scanning')
+    setScanning(true)
     setScanPhaseLabel(SCAN_PHASES[0])
     const t1 = setTimeout(() => setScanPhaseLabel(SCAN_PHASES[1]), 900)
     const t2 = setTimeout(() => setScanPhaseLabel(SCAN_PHASES[2]), 1900)
 
-    const { requiresMoa } = await handleDocumentScan(file, selectedKind)
+    await handleDocumentScan(demoMode ? undefined : tlFile ?? undefined, selectedKind)
 
     clearTimeout(t1)
     clearTimeout(t2)
+    setScanning(false)
 
-    if (state.error) {
-      setPhase('upload')
-      return
-    }
-
-    if (requiresMoa) {
-      setPhase('moa-upload')
-    } else {
+    if (!state.error) {
+      if (moaFile) handleMoaUpload(moaFile.name)
       goTo('business')
     }
   }
 
-  function handleDocFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) startScan(file)
-    e.target.value = ''
-  }
-
-  function handleMoaFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) setMoaFile(file)
-    e.target.value = ''
-  }
-
-  function submitMoa() {
-    if (moaFile) handleMoaUpload(moaFile.name)
-    goTo('business')
-  }
-
-  function handleSkipMoa() {
-    skipMoa()
-    goTo('business')
-  }
-
-  // ── Scanning ───────────────────────────────────────────────────────────────
-  if (phase === 'scanning') {
+  // ── Scanning overlay ───────────────────────────────────────────────────────
+  if (scanning) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh', alignItems: 'center', justifyContent: 'center' }}>
         <div className="orb orb--1" /><div className="orb orb--2" />
@@ -98,93 +61,16 @@ export function StartApplication() {
     )
   }
 
-  // ── MOA Upload ─────────────────────────────────────────────────────────────
-  if (phase === 'moa-upload') {
-    return (
-      <div className="app-shell" style={{ minHeight: '100vh', justifyContent: 'center', padding: '24px 20px' }}>
-        <div className="orb orb--1" /><div className="orb orb--2" />
-        <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420, margin: '0 auto' }}>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="8" fill="var(--primary)" />
-              <path d="M7 9l4 10 3-6 3 6 4-10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span style={{ fontWeight: 700, fontSize: '1rem' }}>Wio Business</span>
-          </div>
-
-          <div style={{ marginBottom: 8 }}>
-            <div className="badge badge--success" style={{ marginBottom: 12 }}>
-              ✓ Trade License scanned
-            </div>
-          </div>
-          <h1 className="page-title" style={{ marginBottom: 8 }}>One more document</h1>
-          <p className="page-subtitle" style={{ marginBottom: 28 }}>
-            LLCs require a Memorandum of Association (MOA) to confirm the company structure and ownership. You can upload it now or add it later.
-          </p>
-
-          <div
-            className="scan-zone"
-            style={{ maxWidth: '100%', marginBottom: 20 }}
-            onClick={() => moaFileRef.current?.click()}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && moaFileRef.current?.click()}
-            aria-label="Upload MOA"
-          >
-            <div className="scan-zone__content" style={{ padding: '8px 0' }}>
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={{ marginBottom: 8 }}>
-                <path d="M6 6h10l6 6v12a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="none" />
-                <path d="M16 6v6h6" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-              </svg>
-              {moaFile ? (
-                <>
-                  <p style={{ margin: 0, fontWeight: 600, color: 'var(--success)' }}>✓ {moaFile.name}</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Click to replace</p>
-                </>
-              ) : (
-                <>
-                  <p style={{ margin: 0, fontWeight: 600, color: 'var(--primary)' }}>Upload Memorandum of Association</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>PDF, JPG, or PNG · Max 10 MB</p>
-                </>
-              )}
-            </div>
-          </div>
-
-          <input
-            ref={moaFileRef}
-            type="file"
-            accept="image/*,.pdf"
-            style={{ display: 'none' }}
-            onChange={handleMoaFileChange}
-          />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Button onClick={submitMoa} disabled={!moaFile}>
-              Continue with MOA
-            </Button>
-            <Button variant="ghost" onClick={handleSkipMoa}>
-              I'll upload this later
-            </Button>
-          </div>
-
-          <p style={{ fontSize: 12, color: 'var(--text-subtle)', marginTop: 16, textAlign: 'center', lineHeight: 1.6 }}>
-            You can also upload the MOA in the Documents step before submitting your application.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  // ── Document Upload ────────────────────────────────────────────────────────
+  // ── Upload screen ──────────────────────────────────────────────────────────
   if (phase === 'upload' && selectedKind) {
-    const config = KIND_CONFIG[selectedKind]
+    const isBusinessLicense = selectedKind === 'business_license'
+
     return (
       <div className="app-shell" style={{ minHeight: '100vh', justifyContent: 'center', padding: '24px 20px' }}>
         <div className="orb orb--1" /><div className="orb orb--2" />
         <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420, margin: '0 auto' }}>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36 }}>
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
               <rect width="28" height="28" rx="8" fill="var(--primary)" />
               <path d="M7 9l4 10 3-6 3 6 4-10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -192,103 +78,137 @@ export function StartApplication() {
             <span style={{ fontWeight: 700, fontSize: '1rem' }}>Wio Business</span>
           </div>
 
-          <h1 className="page-title" style={{ marginBottom: 8 }}>Upload your {config.label}</h1>
+          <h1 className="page-title" style={{ marginBottom: 8 }}>
+            {isBusinessLicense ? 'Upload your documents' : 'Upload your Freelancer Permit'}
+          </h1>
           <p className="page-subtitle" style={{ marginBottom: 28 }}>
-            We'll scan it and extract your business details automatically — no manual typing needed.
+            {isBusinessLicense
+              ? 'We need your Trade License and MOA to get started. We\'ll extract your business details automatically.'
+              : 'We\'ll scan your permit and pre-fill your application details.'}
           </p>
 
-          <div
-            className="scan-zone"
-            style={{ maxWidth: '100%', marginBottom: 16 }}
-            onClick={() => docFileRef.current?.click()}
-            role="button"
-            tabIndex={0}
-            onKeyDown={e => e.key === 'Enter' && docFileRef.current?.click()}
-            aria-label={`Upload ${config.scanLabel}`}
-          >
-            <div className="scan-zone__line" />
-            <div className="scan-zone__content">
-              <div style={{ fontSize: 32, marginBottom: 8 }}>{config.icon}</div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--primary)' }}>Scan or upload {config.scanLabel}</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>JPG, PNG, or PDF · Max 10 MB</p>
+          {/* Trade License upload */}
+          <div style={{ marginBottom: isBusinessLicense ? 16 : 20 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-subtle)', marginBottom: 8 }}>
+              {isBusinessLicense ? 'Trade License' : 'Freelancer Permit'} <span style={{ color: 'var(--danger)' }}>*</span>
+            </p>
+            <div
+              className="scan-zone"
+              style={{ maxWidth: '100%' }}
+              onClick={() => tlRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === 'Enter' && tlRef.current?.click()}
+            >
+              <div className="scan-zone__line" />
+              <div className="scan-zone__content">
+                {tlFile ? (
+                  <>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>✓</div>
+                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--success)', fontSize: 14 }}>{tlFile.name}</p>
+                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Click to replace</p>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--primary)' }}>
+                      Upload {isBusinessLicense ? 'Trade License' : 'Freelancer Permit'}
+                    </p>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-muted)' }}>PDF, JPG, or PNG · Max 10 MB</p>
+                  </>
+                )}
+              </div>
             </div>
+            <input ref={tlRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) setTlFile(f); e.target.value = '' }} />
           </div>
 
-          <input
-            ref={docFileRef}
-            type="file"
-            accept="image/*,.pdf"
-            style={{ display: 'none' }}
-            onChange={handleDocFileChange}
-          />
+          {/* MOA upload — business license only */}
+          {isBusinessLicense && (
+            <div style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-subtle)', marginBottom: 8 }}>
+                Memorandum of Association <span style={{ color: 'var(--text-subtle)', fontWeight: 400 }}>(optional — can upload later)</span>
+              </p>
+              <div
+                className="scan-zone"
+                style={{ maxWidth: '100%', opacity: 0.85 }}
+                onClick={() => moaRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => e.key === 'Enter' && moaRef.current?.click()}
+              >
+                <div className="scan-zone__content">
+                  {moaFile ? (
+                    <>
+                      <div style={{ fontSize: 24, marginBottom: 6 }}>✓</div>
+                      <p style={{ margin: 0, fontWeight: 600, color: 'var(--success)', fontSize: 14 }}>{moaFile.name}</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Click to replace</p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>Upload MOA</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-subtle)' }}>PDF, JPG, or PNG · Max 10 MB</p>
+                    </>
+                  )}
+                </div>
+              </div>
+              <input ref={moaRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) setMoaFile(f); e.target.value = '' }} />
+            </div>
+          )}
+
+          {state.error && (
+            <div className="alert alert--danger" style={{ marginBottom: 16 }}>{state.error}</div>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Button variant="ghost" size="sm" onClick={() => startScan()}>
+            <Button onClick={() => startScan()} disabled={!tlFile}>
+              {isBusinessLicense ? 'Scan documents' : 'Scan permit'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => startScan(true)}>
               Use demo data instead
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setPhase('type-select')}>
-              ← Choose different document type
+              ← Back
             </Button>
           </div>
-
-          {state.error && (
-            <div className="alert alert--danger" style={{ marginTop: 16 }}>{state.error}</div>
-          )}
         </div>
       </div>
     )
   }
 
-  // ── Document Type Selection (default) ──────────────────────────────────────
+  // ── Document type selection ────────────────────────────────────────────────
   return (
-    <div className="app-shell start-screen">
+    <div className="app-shell" style={{ minHeight: '100vh', justifyContent: 'center', padding: '24px 20px' }}>
       <div className="orb orb--1" /><div className="orb orb--2" />
-      <div className="start-hero fade-in">
-        <div style={{ marginBottom: 16 }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 380, margin: '0 auto', textAlign: 'center' }}>
+
+        <div style={{ marginBottom: 20 }}>
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
             <rect width="48" height="48" rx="14" fill="var(--primary)" />
             <path d="M12 16l7 16 5-10 5 10 7-16" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
 
-        <h1 className="start-title">Open your<br />Wio Business account</h1>
-        <p className="start-subtitle">
-          Start by selecting your license type. We'll scan it and pre-fill your application.
+        <h1 className="start-title" style={{ marginBottom: 12 }}>Open your<br />Wio Business account</h1>
+        <p className="start-subtitle" style={{ marginBottom: 36 }}>
+          What type of license do you have?
         </p>
 
-        <div style={{ width: '100%', maxWidth: 360, marginBottom: 32 }}>
-          <p style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-subtle)', marginBottom: 12 }}>
-            What type of license do you have?
-          </p>
-          {(Object.entries(KIND_CONFIG) as [DocumentKind, typeof KIND_CONFIG[DocumentKind]][]).map(([kind, config]) => (
-            <button
-              key={kind}
-              className="doc-type-card"
-              onClick={() => selectKind(kind)}
-              aria-label={`Select ${config.label}`}
-            >
-              <span className="doc-type-card__icon">{config.icon}</span>
+        <div style={{ textAlign: 'left' }}>
+          {([
+            { kind: 'business_license' as DocumentKind, icon: '🏢', label: 'Business License', desc: 'LLC, sole establishment, free zone company, or branch' },
+            { kind: 'freelancer_permit' as DocumentKind, icon: '🧑‍💻', label: 'Freelancer Permit', desc: 'Freelance or professional license' },
+          ]).map(({ kind, icon, label, desc }) => (
+            <button key={kind} className="doc-type-card" onClick={() => selectKind(kind)}>
+              <span className="doc-type-card__icon">{icon}</span>
               <div className="doc-type-card__body">
-                <div className="doc-type-card__label">{config.label}</div>
-                <div className="doc-type-card__desc">{config.description}</div>
+                <div className="doc-type-card__label">{label}</div>
+                <div className="doc-type-card__desc">{desc}</div>
               </div>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, color: 'var(--text-subtle)' }}>
                 <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-          ))}
-        </div>
-
-        <div className="start-features">
-          {[
-            { icon: '⚡', text: 'AI extracts your details from the document' },
-            { icon: '🔒', text: 'Bank-grade encryption on all your documents' },
-            { icon: '📱', text: 'Save progress and resume anytime' },
-          ].map(f => (
-            <div key={f.text} className="start-feature">
-              <span className="start-feature__icon">{f.icon}</span>
-              <span className="start-feature__text">{f.text}</span>
-            </div>
           ))}
         </div>
       </div>

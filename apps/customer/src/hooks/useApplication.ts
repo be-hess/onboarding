@@ -54,10 +54,6 @@ export function useApplication() {
     dispatch({ type: 'UPDATE_DOCUMENT_STATUS', id: 'moa', status: 'uploaded', fileName })
   }
 
-  function skipMoa() {
-    // MOA slot stays 'pending' — user can upload on the Documents page
-  }
-
   async function handleSubmit() {
     dispatch({ type: 'SET_SUBMITTING', submitting: true })
     try {
@@ -80,5 +76,5 @@ export function useApplication() {
     }
   }
 
-  return { state, dispatch, goTo, handleDocumentScan, handleMoaUpload, skipMoa, handleSubmit }
+  return { state, dispatch, goTo, handleDocumentScan, handleMoaUpload, handleSubmit }
 }
