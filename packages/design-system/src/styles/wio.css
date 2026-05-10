@@ -956,3 +956,48 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.6; }
 .alert--success { background: var(--success-subtle); color: var(--success); border-color: var(--success-border); }
 .alert--info    { background: var(--info-subtle);    color: var(--info);    border-color: var(--info-border); }
 
+/* ─── Document Type Selection Cards ──────────────────────────── */
+.doc-type-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-lg);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--t-fast);
+  margin-bottom: 10px;
+  font-family: inherit;
+  color: var(--text);
+}
+.doc-type-card:last-child { margin-bottom: 0; }
+.doc-type-card:hover {
+  background: var(--surface-raised);
+  border-color: var(--primary-border);
+  transform: translateX(2px);
+}
+.doc-type-card:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 3px;
+}
+.doc-type-card__icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  width: 44px;
+  text-align: center;
+}
+.doc-type-card__body { flex: 1; min-width: 0; }
+.doc-type-card__label {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.doc-type-card__desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+

@@ -1,46 +1,57 @@
-import type { ExtractedBusiness, Shareholder, PillarState } from '../store/types'
+import type { ExtractedBusiness, DocumentKind, PillarState } from '../store/types'
 
-// Simulates Trade License OCR extraction — returns Wadiwave LLC mock data
-export async function scanTradeLicense(_file?: File): Promise<{
+export interface ScanResult {
   business: ExtractedBusiness
-  shareholders: Shareholder[]
   tier: 'express' | 'standard' | 'complex'
-}> {
-  await delay(2800)
-  return {
-    tier: 'standard',
-    business: {
-      tradeName: 'Wadiwave Trading LLC',
-      legalName: 'WADIWAVE TRADING LLC',
-      licenseNumber: 'DED-2024-087234',
-      licenseExpiry: '2025-11-30',
-      entityType: 'LLC',
-      jurisdiction: 'UAE Mainland (DED)',
-      registeredAddress: 'Office 412, Al Quoz Industrial Area 3, Dubai, UAE',
-      primaryActivity: 'General Trading',
-      secondaryActivity: 'Import & Export of Consumer Goods',
-    },
-    shareholders: [
-      {
-        id: 'p1',
-        fullName: 'Ahmed Al Mansoori',
-        role: 'owner',
-        ownership: 60,
-        nationality: 'UAE National',
-        kycStatus: 'pending',
-        email: 'ahmed@wadiwave.ae',
-      },
-      {
-        id: 'p2',
-        fullName: 'Sara Khalil',
-        role: 'shareholder',
-        ownership: 40,
-        nationality: 'Lebanese',
-        kycStatus: 'pending',
-        email: 'sara@wadiwave.ae',
-      },
+  requiresMoa: boolean
+}
+
+const MOCK_BUSINESS_LICENSE: ScanResult = {
+  tier: 'standard',
+  requiresMoa: true,
+  business: {
+    documentKind: 'business_license',
+    licensingAuthority: 'Dubai Economy and Tourism (DET)',
+    licenseNumber: 'DET-2024-087234',
+    legalType: 'Limited Liability Company (LLC)',
+    tradeName: 'Wadiwave Trading LLC',
+    issueDate: '2022-11-30',
+    licenseExpiry: '2025-11-30',
+    registeredAddress: 'Office 412, Al Quoz Industrial Area 3, Dubai, UAE',
+    commercialActivities: [
+      'General Trading',
+      'Import and Export of Consumer Goods',
     ],
-  }
+    owners: [
+      { name: 'Ahmed Al Mansoori', ownership: 60, nationality: 'UAE National' },
+      { name: 'Sara Khalil', ownership: 40, nationality: 'Lebanese' },
+    ],
+  },
+}
+
+const MOCK_FREELANCER_PERMIT: ScanResult = {
+  tier: 'express',
+  requiresMoa: false,
+  business: {
+    documentKind: 'freelancer_permit',
+    licensingAuthority: 'twofour54 (Abu Dhabi Media Zone Authority)',
+    licenseNumber: 'FL-2024-T54-3421',
+    legalType: 'Freelancer Permit',
+    tradeName: 'Mohammed Al Rashid',
+    issueDate: '2024-01-15',
+    licenseExpiry: '2025-01-15',
+    registeredAddress: 'twofour54, Khalifa City, Abu Dhabi, UAE',
+    commercialActivities: ['Media Production', 'Content Creation', 'Digital Marketing'],
+    owners: [
+      { name: 'Mohammed Al Rashid', ownership: 100, nationality: 'UAE National' },
+    ],
+  },
+}
+
+// Scans either a business license or freelancer permit
+export async function scanDocument(_file: File | undefined, documentKind: DocumentKind): Promise<ScanResult> {
+  await delay(2800)
+  return documentKind === 'business_license' ? MOCK_BUSINESS_LICENSE : MOCK_FREELANCER_PERMIT
 }
 
 // Simulates application submission
@@ -49,12 +60,11 @@ export async function submitApplication(_payload: unknown): Promise<{ applicatio
   return { applicationId: `APP-${Date.now().toString(36).toUpperCase()}` }
 }
 
-// Simulates async pillar processing — returns snapshots over time
+// Simulates async pillar processing — yields per-pillar updates over ~10s
 export async function* watchPillarProgress(
   _applicationId: string,
   onUpdate: (id: string, state: Partial<PillarState>) => void
 ): AsyncGenerator<void> {
-  // KYB starts immediately
   await delay(800)
   onUpdate('kyb', { status: 'running', progress: 20, eta: '~2 minutes' })
   yield

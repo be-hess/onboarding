@@ -2,6 +2,7 @@ import type { FormEvent } from 'react'
 import { Input, Select, Badge, Button } from '@wio/design-system/src/components'
 import { ApplicationLayout } from '../components'
 import { useApplication } from '../hooks'
+import type { EditableBusinessField } from '../store/types'
 
 const MONTHLY_TURNOVER_OPTIONS = [
   { value: 'under_50k', label: 'Under AED 50,000' },
@@ -33,93 +34,143 @@ export function BusinessDetails() {
     return null
   }
 
+  function field(f: EditableBusinessField) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: f, value: e.target.value })
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     goTo('shareholders')
   }
 
   const tierInfo = tier ? TIER_LABELS[tier] : null
+  const isFreelancer = business.documentKind === 'freelancer_permit'
 
   return (
-    <ApplicationLayout currentStep="business" title="Business Details" subtitle="We've pre-filled what we found on your Trade License. Review and correct anything that's wrong.">
+    <ApplicationLayout
+      currentStep="business"
+      title="Business Details"
+      subtitle="We've extracted these fields from your document. Review and correct anything that's wrong before continuing."
+    >
       <form onSubmit={handleSubmit}>
         {tierInfo && (
-          <div className="card" style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="card" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
             <Badge variant={tierInfo.variant}>{tierInfo.label}</Badge>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Application tier assigned</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {isFreelancer ? 'Freelancer application' : 'Business application'}
+              </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{tierInfo.eta}</div>
             </div>
           </div>
         )}
 
+        {/* Extracted license fields */}
         <div className="card" style={{ marginBottom: 20 }}>
-          <h3 className="section-label">Extracted from Trade License</h3>
+          <h3 className="section-label" style={{ marginBottom: 16 }}>Extracted from your document</h3>
           <div className="form-grid">
             <Input
-              label="Trade Name"
+              label="Trade Name / Company Name"
               extracted
               value={business.tradeName}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'tradeName', value: e.target.value })}
+              onChange={field('tradeName')}
               required
             />
             <Input
-              label="Legal Name"
+              label="Legal Type / Form"
               extracted
-              value={business.legalName}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'legalName', value: e.target.value })}
+              value={business.legalType}
+              onChange={field('legalType')}
               required
+              helper={isFreelancer ? 'Freelancer Permit' : 'e.g. LLC, Sole Establishment, FZ-LLC'}
+            />
+            <Input
+              label="Licensing Authority"
+              extracted
+              value={business.licensingAuthority}
+              onChange={field('licensingAuthority')}
+              required
+              helper="The authority that issued your license (e.g. DET, ADGM, DIFC, MOEC)"
             />
             <Input
               label="License Number"
               extracted
               value={business.licenseNumber}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'licenseNumber', value: e.target.value })}
+              onChange={field('licenseNumber')}
               required
             />
             <Input
-              label="License Expiry"
+              label="Issue Date"
+              extracted
+              type="date"
+              value={business.issueDate}
+              onChange={field('issueDate')}
+              required
+            />
+            <Input
+              label="Expiry Date"
               extracted
               type="date"
               value={business.licenseExpiry}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'licenseExpiry', value: e.target.value })}
+              onChange={field('licenseExpiry')}
               required
             />
-            <Input
-              label="Entity Type"
-              extracted
-              value={business.entityType}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'entityType', value: e.target.value })}
-              required
-            />
-            <Input
-              label="Jurisdiction"
-              extracted
-              value={business.jurisdiction}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'jurisdiction', value: e.target.value })}
-              required
-            />
-            <Input
-              label="Primary Activity"
-              extracted
-              value={business.primaryActivity}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'primaryActivity', value: e.target.value })}
-              required
-            />
-            <Input
-              label="Registered Address"
-              extracted
-              value={business.registeredAddress}
-              onChange={e => dispatch({ type: 'UPDATE_BUSINESS_FIELD', field: 'registeredAddress', value: e.target.value })}
-              required
-            />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Input
+                label="Registered Address"
+                extracted
+                value={business.registeredAddress}
+                onChange={field('registeredAddress')}
+                required
+              />
+            </div>
           </div>
         </div>
 
+        {/* Commercial activities — display only, not editable inline */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 className="section-label" style={{ marginBottom: 12 }}>Commercial Activities</h3>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Extracted from your document. Contact us if you need to add or change activities.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {business.commercialActivities.map((activity, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface-raised)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.9375rem' }}>{activity}</span>
+                {i === 0 && <Badge variant="extracted" style={{ marginLeft: 'auto' }}>Primary</Badge>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Owners — display only, shareholder editing happens on next screen */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 className="section-label" style={{ marginBottom: 4 }}>
+            {isFreelancer ? 'Permit Holder' : `Owners / Partners (${business.owners.length})`}
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Extracted from your document. You'll complete identity verification for each person on the next step.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {business.owners.map((owner, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--surface-raised)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{owner.name}</div>
+                  {owner.nationality && <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{owner.nationality}</div>}
+                </div>
+                <Badge variant="default">{owner.ownership}%</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Activity questions */}
         <div className="card" style={{ marginBottom: 24 }}>
           <h3 className="section-label">A few quick questions</h3>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-            These help us set up the right account features for your business.
+            These help us configure the right account features and transaction limits.
           </p>
           <div className="form-grid">
             <Input
@@ -144,7 +195,7 @@ export function BusinessDetails() {
               placeholder="Select regions"
               value={state.expectedCounterparties}
               onChange={e => dispatch({ type: 'UPDATE_ACTIVITY_QUESTIONS', field: 'expectedCounterparties', value: e.target.value })}
-              helper="Select the broadest region that applies"
+              helper={state.expectedCounterparties === 'international' ? 'International transactions may require enhanced due diligence and extend review time.' : 'Select the broadest region that applies'}
               required
             />
           </div>

@@ -36,16 +36,16 @@ export function ReviewSubmit() {
           <span className="check-row__value">{business.licenseNumber}</span>
         </div>
         <div className="check-row">
-          <span className="check-row__label">Entity Type</span>
-          <span className="check-row__value">{business.entityType}</span>
+          <span className="check-row__label">Legal Type</span>
+          <span className="check-row__value">{business.legalType}</span>
         </div>
         <div className="check-row">
-          <span className="check-row__label">Jurisdiction</span>
-          <span className="check-row__value">{business.jurisdiction}</span>
+          <span className="check-row__label">Licensing Authority</span>
+          <span className="check-row__value">{business.licensingAuthority}</span>
         </div>
         <div className="check-row">
-          <span className="check-row__label">Primary Activity</span>
-          <span className="check-row__value">{business.primaryActivity}</span>
+          <span className="check-row__label">Activities</span>
+          <span className="check-row__value">{business.commercialActivities[0]}{business.commercialActivities.length > 1 ? ` +${business.commercialActivities.length - 1}` : ''}</span>
         </div>
         {tier && (
           <div className="check-row">

@@ -40,9 +40,11 @@ The root record for a single onboarding attempt by one business.
 | `business_id` | UUID FK → Business | The entity being onboarded |
 | `applicant_person_id` | UUID FK → Person | The person who initiated the application |
 | `tier` | enum | `express` · `standard` · `complex` |
-| `entity_type` | enum | `sole_establishment` · `llc` · `free_zone_llc` · `corporate_group` |
+| `document_kind` | enum | `business_license` · `freelancer_permit` — set at the first screen, drives MOA requirement |
+| `entity_type` | enum | `sole_establishment` · `llc` · `free_zone_llc` · `free_zone_est` · `corporate_group` · `branch` · `ngo` |
 | `status` | enum | `draft` · `in_progress` · `pending_review` · `approved` · `declined` · `cancelled` |
 | `jurisdiction` | string | e.g. `uae_mainland` · `adgm` · `difc` · `rak_icc` |
+| `requires_moa` | bool | Derived from `document_kind`: true for `business_license`, false for `freelancer_permit` |
 | `submitted_at` | timestamp | Set when applicant confirms submission |
 | `decision_at` | timestamp | Set on final approve/decline |
 | `created_at` | timestamp | |
@@ -69,27 +71,43 @@ A single source of truth for a legal entity. Created once; shared across pillars
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | Primary key |
-| `trade_license_number` | string | Unique per authority |
-| `trade_license_authority` | enum | `ded_ad` · `det_dubai` · `adgm` · `difc` · `moec` · `uaq_ftz` · `rak_icc` · `jafza` · `dmcc` · other |
-| `legal_name` | string | As on registry |
-| `trade_name` | string | May differ from legal name |
-| `entity_type` | enum | See Application |
+| `document_kind` | enum | `business_license` · `freelancer_permit` — determines MOA requirement and tier classification |
+| `license_number` | string | Unique per authority; extracted from scanned document |
+| `licensing_authority` | enum | `det_dubai` · `ded_ad` · `adgm` · `difc` · `moec` · `twofour54` · `uaq_ftz` · `rak_icc` · `jafza` · `dmcc` · `other` |
+| `legal_type` | string | As stated on license (e.g. `Limited Liability Company`, `Freelancer Permit`, `Sole Establishment`) |
+| `trade_name` | string | Trade name / company name as on license |
+| `entity_type` | enum | Normalised from `legal_type`; see Application |
 | `jurisdiction` | string | |
-| `incorporated_at` | date | |
-| `trade_license_expiry` | date | |
-| `trade_license_status` | enum | `active` · `expired` · `suspended` |
-| `primary_business_activity` | string | Applicant-confirmed from TL activities |
-| `business_activities` | string[] | Full list from TL |
-| `compliance_activity_category` | enum | Derived by Business Activity agent |
-| `ubo_graph` | JSON | Ownership tree: nodes (Person/Entity) + edges (ownership_pct, role) |
+| `license_issue_date` | date | Extracted from document |
+| `license_expiry_date` | date | Extracted from document |
+| `license_status` | enum | `active` · `expired` · `suspended` |
+| `registered_address` | string | As extracted from document |
+| `commercial_activities` | string[] | Full list extracted from document; first entry = primary activity |
+| `compliance_activity_category` | enum | Derived by Business Activity agent from `commercial_activities` |
+| `ubo_graph` | JSON | Ownership tree: nodes (Person/Entity) + edges (ownership_pct, role); extracted from TL owners list in MVP |
 | `registry_data_source` | enum | `registry_api` · `document_upload` · `manual` |
 | `registry_data_fetched_at` | timestamp | |
 | `created_at` | timestamp | |
 | `updated_at` | timestamp | |
 
+**Extracted fields (from document scan — all 8 mapped to Business record):**
+
+| Extracted Field | Maps to |
+|---|---|
+| Licensing Authority | `licensing_authority` |
+| License Number | `license_number` |
+| Legal Type / Form | `legal_type` → normalized to `entity_type` |
+| Trade Name / Company Name | `trade_name` |
+| Issue Date | `license_issue_date` |
+| Expiry Date | `license_expiry_date` |
+| Commercial Activities | `commercial_activities[]` |
+| Address | `registered_address` |
+| Owners / Partners list with % | → creates `PersonBusinessRole` records with `ownership_pct` |
+
 **Notes:**
 - If the business already exists in Wio's system (e.g. has another product), the existing record is reused — no re-collection
-- `ubo_graph` is built by the Corporate Structure agent (Group 3); in MVP it is a flat list of owners from the TL
+- `ubo_graph` is built by the Corporate Structure agent (Group 3); in MVP it is a flat list of owners from the TL extraction
+- For `freelancer_permit`: `entity_type` = `sole_establishment`, `ubo_graph` = single person at 100%, MOA is not requested
 
 ---
 

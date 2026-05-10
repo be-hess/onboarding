@@ -2,17 +2,37 @@ export type WizardStep = 'start' | 'business' | 'shareholders' | 'documents' | '
 
 export type DocStatus = 'pending' | 'uploading' | 'uploaded' | 'verified' | 'rejected'
 
-export interface ExtractedBusiness {
-  tradeName: string
-  legalName: string
-  licenseNumber: string
-  licenseExpiry: string
-  entityType: string
-  jurisdiction: string
-  registeredAddress: string
-  primaryActivity: string
-  secondaryActivity?: string
+export type DocumentKind = 'business_license' | 'freelancer_permit'
+
+export interface ExtractedOwner {
+  name: string
+  ownership: number
+  nationality?: string
 }
+
+// All fields directly extracted from the scanned document
+export interface ExtractedBusiness {
+  documentKind: DocumentKind
+  licensingAuthority: string
+  licenseNumber: string
+  legalType: string
+  tradeName: string
+  issueDate: string
+  licenseExpiry: string
+  registeredAddress: string
+  commercialActivities: string[]
+  owners: ExtractedOwner[]
+}
+
+// String-only fields the user can edit inline
+export type EditableBusinessField =
+  | 'licensingAuthority'
+  | 'licenseNumber'
+  | 'legalType'
+  | 'tradeName'
+  | 'issueDate'
+  | 'licenseExpiry'
+  | 'registeredAddress'
 
 export interface Shareholder {
   id: string
@@ -49,6 +69,10 @@ export interface ApplicationState {
   applicationId: string | null
   step: WizardStep
   tier: 'express' | 'standard' | 'complex' | null
+  // Document kind selected before scanning
+  documentKind: DocumentKind | null
+  // Whether MOA is required (false for freelancer permits)
+  requiresMoa: boolean
   tlScanned: boolean
   business: ExtractedBusiness | null
   expectedActivities: string
@@ -64,9 +88,10 @@ export interface ApplicationState {
 
 export type ApplicationAction =
   | { type: 'SET_STEP'; step: WizardStep }
+  | { type: 'SET_DOCUMENT_KIND'; documentKind: DocumentKind }
   | { type: 'SET_TL_SCANNED' }
-  | { type: 'SET_EXTRACTED_BUSINESS'; business: ExtractedBusiness; tier: 'express' | 'standard' | 'complex' }
-  | { type: 'UPDATE_BUSINESS_FIELD'; field: keyof ExtractedBusiness; value: string }
+  | { type: 'SET_EXTRACTED_BUSINESS'; business: ExtractedBusiness; tier: 'express' | 'standard' | 'complex'; requiresMoa: boolean }
+  | { type: 'UPDATE_BUSINESS_FIELD'; field: EditableBusinessField; value: string }
   | { type: 'UPDATE_ACTIVITY_QUESTIONS'; field: 'expectedActivities' | 'expectedMonthlyTurnover' | 'expectedCounterparties'; value: string }
   | { type: 'ADD_SHAREHOLDER'; shareholder: Shareholder }
   | { type: 'UPDATE_SHAREHOLDER_STATUS'; id: string; status: Shareholder['kycStatus'] }

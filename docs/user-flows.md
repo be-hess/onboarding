@@ -7,7 +7,7 @@
 
 ## Flow Index
 
-1. [Tier 1 — Express Onboarding (Sole Establishment)](#flow-1--tier-1-express-onboarding-sole-establishment)
+1. [Tier 1 — Express Onboarding (Freelancer Permit / Sole Est.)](#flow-1--tier-1-express-onboarding-freelancer-permit--sole-establishment)
 2. [Tier 2 — Standard Onboarding (LLC)](#flow-2--tier-2-standard-onboarding-llc)
 3. [Signatory Self-Serve Verification](#flow-3--signatory-self-serve-verification)
 4. [Back Office — Maker Review](#flow-4--back-office--maker-review)
@@ -17,34 +17,52 @@
 
 ---
 
-## Flow 1 — Tier 1: Express Onboarding (Sole Establishment)
+## Flow 1 — Tier 1: Express Onboarding (Freelancer Permit / Sole Establishment)
 
-**Who:** A UAE sole proprietor / single-owner business, single authorized signatory (the same person as the owner).
+**Who:** A UAE freelancer (freelancer permit) or sole proprietor (sole establishment license). Single owner, single authorised signatory — same person.
 **Target:** Account active in < 1 hour.
 **Automation:** Fully automated — no human review if all signals are clean.
+**Key difference from Tier 2:** No MOA is required. License type is confirmed at step 1.
 
 ```
 Applicant                          System / Agents
 ────────────────────────────────   ─────────────────────────────────────────
 1. Opens Wio Business app or web
-   "Let's get started"
+   Selects document type:
+   [Business License] or
+   [Freelancer Permit]           → Document kind stored in application state
+   → Selects "Freelancer Permit"
 
-2. Scans / uploads Trade License   → Is doc? agent validates file type
-                                   → TL processing agent:
-                                       checks validity with registry [MOCK]
-                                       extracts: name, activity, expiry, owner
+2. Uploads / scans Freelancer      → Is doc? agent validates file type
+   Permit                         → TL processing agent:
+                                       checks validity with issuing authority
+                                       [MOCK]
+                                       extracts all 8 fields:
+                                         Licensing Authority
+                                         License Number
+                                         Legal Type / Form
+                                         Trade Name / Permit Holder Name
+                                         Issue Date
+                                         Expiry Date
+                                         Commercial Activities
+                                         Address
+                                         Owner (single, 100%)
                                        checks for duplicate in Wio system
 
-3. Sees pre-filled profile:        → Business Activity agent:
-   "Looking good, [Business Name]"     maps activities to compliance list
-   Reviews and confirms company    → Orchestration Engine:
-   details                             classifies tier = express
-                                       starts P1, P2, P3, P4 in parallel
+                                   → No MOA requested (documentKind =
+                                       freelancer_permit → requiresMoa = false)
+                                   → Tier classified = express
+
+3. Sees pre-filled Business        → Business Activity agent:
+   Details screen:                     maps activities to compliance list
+   - All 8 extracted fields        → Orchestration Engine:
+   - Single owner listed               starts P1, P2, P3, P4 in parallel
+   Reviews and corrects if needed
 
 4. Answers 3 upfront questions:
-   - Purpose (transactional / FX / e-commerce / payroll)
-   - Expected monthly volume
-   - International operations? (Y/N)
+   - Main business activities (free text)
+   - Expected monthly turnover (range)
+   - Where will you transact? (regions)
 
 5. Scans Emirates ID               → Personal Documents OCR agent:
                                        extracts name, DOB, EID number
@@ -86,29 +104,63 @@ Applicant                          System / Agents
 **Who:** A UAE LLC with 1–3 UAE shareholders, standard ownership structure.
 **Target:** Decision within 24 hours.
 **Automation:** Agents handle all checks; human (Maker/Checker) reviews flagged items or makes final decision.
+**Key difference from Tier 1:** MOA is required. Prompted immediately after Trade License scan (before Business Details).
 
 ```
 Applicant                          System / Agents
 ────────────────────────────────   ─────────────────────────────────────────
-Steps 1–5 same as Tier 1
-(TL scan, pre-fill, 3 questions,
- company confirmation)
+1. Opens Wio Business app or web
+   Selects document type:
+   → Selects "Business License"  → Document kind stored in application state
 
-6. System detects: entity_type     → Orchestration Engine:
-   = llc, multiple shareholders        tier = standard
-                                       MOA upload requested
+2. Uploads / scans Trade License   → Is doc? agent validates file type
+                                   → TL processing agent:
+                                       checks validity with registry [MOCK]
+                                       extracts all 8 fields:
+                                         Licensing Authority
+                                         License Number
+                                         Legal Type / Form (LLC)
+                                         Trade Name
+                                         Issue Date
+                                         Expiry Date
+                                         Commercial Activities
+                                         Address
+                                         Owners list with % ownership
+                                       checks for duplicate in Wio system
 
-7. Uploads MOA                     → Is doc? agent validates MOA
-                                   → MOA digestion agent [Group 2, MVP stub]:
-                                       compares MOA against TL
-                                       extracts: shareholders, directors,
-                                       signing authority, capital
-                                       flags discrepancies vs TL
+                                   → documentKind = business_license
+                                       → requiresMoa = true
+                                   → Orchestration Engine:
+                                       tier = standard (LLC, 2+ owners)
 
-8. Reviews extracted ownership
-   structure: "We found 2 owners.
-   Does this look right?"
-   Confirms or corrects
+3. Prompted to upload MOA          → Is doc? agent validates MOA
+   (same start screen, step 2):    → MOA digestion agent [Group 2, MVP stub]:
+   "One more document needed"          extracts: shareholders, directors,
+   Can upload now or skip to            signing authority, capital
+   Documents step later
+
+4. Sees pre-filled Business
+   Details screen — all 8 fields
+   from TL extraction shown.
+   Owners list shown read-only
+   (editing happens next screen).
+   Reviews and corrects if needed.
+
+5. Answers 3 upfront questions:
+   - Main business activities (free text)
+   - Expected monthly turnover (range)
+   - Where will you transact? (regions)
+   ⚠ If "International" selected:
+     inline warning shown about EDD
+
+6. Shareholders screen:
+   Both owners pre-populated       → P2 KYC Service emits invitations
+   from TL extraction.                 for non-applicant owners
+   "Send KYC invite" per person    → PersonBusinessRole created per owner
+   Can add additional signatories
+
+7. Reviews extracted ownership
+   structure: confirms or corrects
 
 9. For each owner / UBO:           → P2 KYC Service emits invitations
    - UAE owner (same session):         for non-applicant owners

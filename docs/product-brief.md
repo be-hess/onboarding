@@ -37,7 +37,7 @@ Every application progresses across four pillars that run **in parallel** wherev
 
 | Pillar | Scope |
 |---|---|
-| **P1 — Verify Business (KYB)** | Business identity, corporate structure, ownership mapping. Entity type, jurisdiction, trade licence status. Parents, subsidiaries, UBOs, beneficial chains. Registry-sourced data with document upload as fallback. |
+| **P1 — Verify Business (KYB)** | Business identity, corporate structure, ownership mapping. Entity type, jurisdiction, trade license status. Parents, subsidiaries, UBOs, beneficial chains. Registry-sourced data with document upload as fallback. |
 | **P2 — Identify & Verify People (KYC)** | Owners, directors, signatories — identity and liveness. Emirates ID / UAE Pass. Liveness / video KYC. Real-time signatory matches. Non-UAE shareholders → eIDV / attestation. Canonical Person Record reused across roles. |
 | **P3 — Compliance, Risk & Fraud** | EDD, AML screening, fraud signals, risk classification. PEP · sanctions · adverse media in real-time. Device · behaviour · network signals. CRAM encoded in product. FATCA/CRS derived from canonical records. Policies as code, not playbooks. |
 | **P4 — Account Setup & Product** | Provisioning, plan selection, activation, first transaction. Accounts · IBANs · cards · cheque books. AECB wired-in from day one. Reason of relationship captured upfront. Success metric = first transaction enabled, not "approved". |
