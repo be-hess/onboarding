@@ -1,55 +1,45 @@
 import { createContext, useContext, useReducer } from 'react'
 import type { ReactNode } from 'react'
-import type { ApplicationState, ApplicationAction, DocumentSlot, PillarState } from './types'
+import type { ApplicationState, ApplicationAction, PillarState } from './types'
 
-const BASE_DOCUMENTS: DocumentSlot[] = [
-  { id: 'trade_license', name: 'Trade License / Freelancer Permit', description: 'Scanned in the previous step', required: true, status: 'uploaded' },
-  { id: 'emirates_id', name: 'Emirates ID (Owner)', description: 'Front and back of Emirates ID', required: true, status: 'pending' },
-  { id: 'passport', name: 'Passport (Owner)', description: 'Bio page of passport', required: true, status: 'pending' },
-  { id: 'proof_address', name: 'Proof of Address', description: 'Utility bill or tenancy contract (last 3 months)', required: false, status: 'pending' },
-  { id: 'bank_statement', name: 'Bank Statement', description: 'Last 3 months from existing bank', required: false, status: 'pending' },
-]
-
-const MOA_SLOT: DocumentSlot = {
-  id: 'moa',
-  name: 'Memorandum of Association',
-  description: 'MOA or Articles of Association',
-  required: true,
-  status: 'pending',
-}
-
+// Three pillars per CLAUDE_BRIEFING: KYB · KYI · WWMA
 const INITIAL_PILLARS: PillarState[] = [
-  { id: 'kyb', label: 'Business Verification', description: 'Trade license and registry checks', status: 'idle' },
-  { id: 'kyc', label: 'Identity Verification', description: 'Owner and signatory KYC', status: 'idle' },
-  { id: 'compliance', label: 'Compliance & Risk', description: 'AML, sanctions, and fraud checks', status: 'idle' },
-  { id: 'account', label: 'Account Setup', description: 'Account configuration and activation', status: 'idle' },
+  { id: 'kyb', label: 'Business Verification (KYB)', description: 'Registry data, trade licence, UBO structure', status: 'idle' },
+  { id: 'kyi', label: 'Identity Verification (KYI)', description: 'Owner and signatory verification', status: 'idle' },
+  { id: 'wwma', label: 'Account Setup (WWMA)', description: 'Compliance checks, IBAN, activation', status: 'idle' },
 ]
 
 const INITIAL_STATE: ApplicationState = {
   applicationId: null,
-  step: 'start',
+  step: 'uae-pass',
   tier: null,
-  documentKind: null,
-  requiresMoa: false,
-  tlScanned: false,
+
+  // Step 01
+  uaePassVerified: false,
+  personName: null,
+
+  // Step 02
+  licenseNumber: '',
+  preScreenResult: null,
+  preScreenLoading: false,
   business: null,
-  activities: [],
-  primaryActivityIndex: 0,
-  businessModelSummary: null,
-  businessModelLoading: false,
+
+  // Step 03
+  primaryActivity: '',
   expectedMonthlyTurnover: '',
-  countriesOfOperation: '',
-  shareholders: [],
-  documents: [],
+  sourceOfFunds: '',
+  cramScore: null,
+  eddTriggered: false,
+
+  // Step 04
+  signatories: [],
+
+  // Step 05
   pillars: INITIAL_PILLARS,
+
   submitting: false,
   submitted: false,
   error: null,
-}
-
-function buildDocumentList(requiresMoa: boolean): DocumentSlot[] {
-  if (!requiresMoa) return BASE_DOCUMENTS
-  return [BASE_DOCUMENTS[0], { ...MOA_SLOT }, ...BASE_DOCUMENTS.slice(1)]
 }
 
 function reducer(state: ApplicationState, action: ApplicationAction): ApplicationState {
@@ -57,100 +47,68 @@ function reducer(state: ApplicationState, action: ApplicationAction): Applicatio
     case 'SET_STEP':
       return { ...state, step: action.step }
 
-    case 'SET_DOCUMENT_KIND':
-      return { ...state, documentKind: action.documentKind }
+    // ── Step 01: UAE Pass ────────────────────────────────────────────
+    case 'SET_UAE_PASS_VERIFIED':
+      return { ...state, uaePassVerified: true, personName: action.name }
 
-    case 'SET_TL_SCANNED':
-      return { ...state, tlScanned: true }
+    // ── Step 02: Find business ───────────────────────────────────────
+    case 'SET_LICENSE_NUMBER':
+      return { ...state, licenseNumber: action.value }
 
-    case 'SET_EXTRACTED_BUSINESS':
+    case 'SET_PRE_SCREEN_LOADING':
+      return { ...state, preScreenLoading: action.loading, error: null }
+
+    case 'SET_PRE_SCREEN_RESULT':
       return {
         ...state,
+        preScreenLoading: false,
+        preScreenResult: action.result,
         business: action.business,
         tier: action.tier,
-        requiresMoa: action.requiresMoa,
-        activities: [...action.business.commercialActivities],
-        primaryActivityIndex: 0,
-        documents: buildDocumentList(action.requiresMoa),
+        // Seed primary activity from registry data
+        primaryActivity: action.business.commercialActivities[0] ?? '',
+        // Seed signatories from registry owners for Tier 2/3
+        signatories: action.tier !== 'express'
+          ? action.business.owners.map((o, i) => ({
+              id: `registry-${i}`,
+              fullName: o.name,
+              role: 'owner' as const,
+              ownership: o.ownership,
+              nationality: o.nationality ?? '',
+              kyiStatus: 'pending' as const,
+            }))
+          : [],
       }
 
-    case 'UPDATE_BUSINESS_FIELD':
-      if (!state.business) return state
-      return { ...state, business: { ...state.business, [action.field]: action.value } }
-
-    // ── Activity actions ────────────────────────────────────────────
-    case 'SET_PRIMARY_ACTIVITY':
-      return { ...state, primaryActivityIndex: action.index }
-
-    case 'UPDATE_ACTIVITY': {
-      const updated = [...state.activities]
-      updated[action.index] = action.value
-      return { ...state, activities: updated }
-    }
-
-    case 'ADD_ACTIVITY':
-      return { ...state, activities: [...state.activities, action.activity] }
-
-    case 'REMOVE_ACTIVITY': {
-      const filtered = state.activities.filter((_, i) => i !== action.index)
-      const newPrimary = state.primaryActivityIndex >= filtered.length
-        ? Math.max(0, filtered.length - 1)
-        : action.index < state.primaryActivityIndex
-          ? state.primaryActivityIndex - 1
-          : state.primaryActivityIndex === action.index
-            ? 0
-            : state.primaryActivityIndex
-      return { ...state, activities: filtered, primaryActivityIndex: newPrimary }
-    }
-
-    // ── Business model actions ──────────────────────────────────────
-    case 'SET_BUSINESS_MODEL_LOADING':
-      return { ...state, businessModelLoading: action.loading }
-
-    case 'SET_BUSINESS_MODEL_SUMMARY':
-      return { ...state, businessModelSummary: action.summary, businessModelLoading: false }
-
-    case 'UPDATE_BUSINESS_MODEL_SUMMARY':
-      return { ...state, businessModelSummary: action.summary }
+    // ── Step 03: Business questions ──────────────────────────────────
+    case 'UPDATE_PRIMARY_ACTIVITY':
+      return { ...state, primaryActivity: action.value }
 
     case 'UPDATE_TURNOVER':
       return { ...state, expectedMonthlyTurnover: action.value }
 
-    case 'UPDATE_COUNTRIES':
-      return { ...state, countriesOfOperation: action.value }
+    case 'UPDATE_SOURCE_OF_FUNDS':
+      return { ...state, sourceOfFunds: action.value }
 
-    // ── Shareholder actions ─────────────────────────────────────────
-    case 'ADD_SHAREHOLDER':
-      return { ...state, shareholders: [...state.shareholders, action.shareholder] }
+    case 'SET_CRAM_RESULT':
+      return { ...state, cramScore: action.score, eddTriggered: action.eddTriggered }
 
-    case 'UPDATE_SHAREHOLDER':
+    // ── Step 04: Who needs access ────────────────────────────────────
+    case 'ADD_SIGNATORY':
+      return { ...state, signatories: [...state.signatories, action.signatory] }
+
+    case 'UPDATE_SIGNATORY_STATUS':
       return {
         ...state,
-        shareholders: state.shareholders.map(s =>
-          s.id === action.id ? { ...s, ...action.updates } : s
+        signatories: state.signatories.map(s =>
+          s.id === action.id ? { ...s, kyiStatus: action.status } : s
         ),
       }
 
-    case 'UPDATE_SHAREHOLDER_STATUS':
-      return {
-        ...state,
-        shareholders: state.shareholders.map(s =>
-          s.id === action.id ? { ...s, kycStatus: action.status } : s
-        ),
-      }
+    case 'REMOVE_SIGNATORY':
+      return { ...state, signatories: state.signatories.filter(s => s.id !== action.id) }
 
-    case 'REMOVE_SHAREHOLDER':
-      return { ...state, shareholders: state.shareholders.filter(s => s.id !== action.id) }
-
-    // ── Document actions ────────────────────────────────────────────
-    case 'UPDATE_DOCUMENT_STATUS':
-      return {
-        ...state,
-        documents: state.documents.map(d =>
-          d.id === action.id ? { ...d, status: action.status, fileName: action.fileName ?? d.fileName } : d
-        ),
-      }
-
+    // ── Submission / pillar tracking ─────────────────────────────────
     case 'SET_SUBMITTING':
       return { ...state, submitting: action.submitting }
 

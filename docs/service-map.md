@@ -1,7 +1,7 @@
 # Service Map: Wio Business SME Onboarding
 
-**Version:** 0.1 (MVP)
-**Date:** 2026-05-08
+**Version:** 0.2
+**Date:** 2026-05-18
 
 ---
 
@@ -9,26 +9,29 @@
 
 | Service | Type | Owns | Consumes | MVP Status |
 |---|---|---|---|---|
-| Orchestration Engine | Internal core | Application state, tier classification, agent dispatch | All pillar events, agent outputs | MVP |
-| Applicant API | Internal API | Applicant-facing routes | Orchestration Engine, Document Service, Notification Service | MVP |
-| Back Office API | Internal API | Ops-facing routes, case queue | All pillar services, Audit Service | MVP |
-| P1 KYB Service | Internal pillar | Business profile, UBO graph, TL validation | Registry Adapter, Document Service, Canonical Business DB | MVP |
-| P2 KYC Service | Internal pillar | Person verification, signatory status | UAE Pass Adapter, OCR/Liveness Adapter, Canonical Person DB | MVP |
-| P3 Compliance Service | Internal pillar | CRAM, EDD, AML/PEP/fraud scoring | Screening Adapter, Fraud Adapter, Canonical records | MVP |
-| P4 Account Service | Internal pillar | IBAN reservation, account state, AECB result | AECB Adapter, Core Banking stub | MVP |
+| Pillar Orchestrator | Internal core | Application state, tier classification, agent dispatch, SLA enforcement | All pillar events, agent outputs, OPA/Rego policy engine | MVP |
+| Applicant API | Internal API | Applicant-facing routes (Steps 01–06) | Orchestrator, Document Service, Notification Service | MVP |
+| Back Office API | Internal API | Unified Case Workspace routes, case queue | All pillar services, Audit Service | MVP |
+| KYB Service | Internal pillar | Business profile, UBO graph, TL registry validation, KYB score | Registry Adapter, Document Service, KYB Intl Adapter, Canonical Business DB | MVP |
+| KYI Service | Internal pillar | Person verification, signatory status, CPR management | UAE Pass Adapter, OCR/Liveness Adapter, Nomad/IDfy Adapter, Canonical Person DB | MVP |
+| WWMA Service | Internal pillar | CRAM, EDD, AML/PEP screening, AECB, IBAN pre-reservation, activation | OPA/Rego Engine, Screening Adapter, Fraud Adapter, AECB Adapter, Contentful, Core Banking Stub, Canonical records | MVP |
+| OPA/Rego Policy Engine | Internal service | CRAM scoring, EDD trigger logic, field expiry rules — all pinned to policy version | Versioned policy repo; all pillar services call it | MVP (read-only, no admin UI in MVP) |
 | Agent Service | Internal core | Agent run lifecycle, agent output store | All pillar services, Document Service | MVP (Group 1 agents) |
 | Document Service | Internal core | Document storage, type validation, extraction results | OCR Adapter, Document Store | MVP |
-| Canonical Person DB | Internal data | Person records across all roles | P2 KYC, P3 Compliance, P1 KYB (UBO) | MVP |
-| Canonical Business DB | Internal data | Business entity records | P1 KYB, P3 Compliance | MVP |
-| Audit / Event Store | Internal data | Immutable event log | All services (write); Back Office API (read) | MVP |
-| Notification Service | Internal utility | Outbound comms (email, SMS, push) | Application state events | MVP (email only) |
-| Registry Adapter | External adapter | — | DED / DET / ADGM / DIFC / MOEC APIs | **Mocked in MVP** |
-| UAE Pass Adapter | External adapter | — | UAE Pass Auth & Identity API | **Mocked in MVP** |
-| OCR / Liveness Adapter | External adapter | — | Onfido / AWS Textract or equivalent | **Mocked in MVP** |
-| Screening Adapter | External adapter | — | LSEG WorldCheck / ComplyAdvantage / Dow Jones | **Mocked in MVP** |
-| Fraud Adapter | External adapter | — | Sift / Seon / Feedzai | **Mocked in MVP** |
-| AECB Adapter | External adapter | — | AECB Credit Bureau API | **Mocked in MVP** |
-| Core Banking Stub | External adapter | — | Core banking provisioning system | **Stubbed in MVP** |
+| Canonical Person DB | Internal data | Person records (CPR) across all roles | KYI, WWMA, KYB (UBO) | MVP |
+| Canonical Business DB | Internal data | Business entity records (CBR) including KYB score | KYB, WWMA | MVP |
+| Audit / Event Store | Internal data | Immutable event log (EventStoreDB / Kafka log-compacted) | All services (write); Back Office API (read) | MVP |
+| Notification Service | Internal utility | Outbound comms (email, bilingual SMS AR/EN, push) | Application state events | MVP (email only; SMS/push stub) |
+| Registry Adapter | External adapter | — | TAMM (ADDED), DET Dubai, ADGM, DIFC, MOEC, DMCC, JAFZA, RAK ICC, UAQ FTZ, SHAMS | **Mocked in MVP** |
+| UAE Pass Adapter | External adapter | — | UAE Pass OIDC SOP3 / High Assurance | **Mocked in MVP** |
+| OCR / Liveness Adapter | External adapter | — | Onfido (NIST PAD Level 2) / AWS Textract / Klippa / Hyperscience | **Mocked in MVP** |
+| Screening Adapter | External adapter | — | LSEG WorldCheck · Dow Jones Risk Center · ComplyAdvantage (webhook-based) | **Mocked in MVP** |
+| Fraud Adapter | External adapter | — | Sift / Seon / Feedzai (SDK in-app + server-side API) | **Mocked in MVP** |
+| AECB Adapter | External adapter | — | AECB Credit Bureau API (TTL-cached 24h) | **Mocked in MVP** |
+| KYB Intl Adapter | External adapter | — | Moody's KYB / Refinitiv / D&B — international UBO resolution | **Mocked in MVP** |
+| Nomad / IDfy Adapter | External adapter | — | Remote attestation for non-UAE individuals | **Mocked in MVP** |
+| Contentful CMS | External service | — | EDD question bank (sector × jurisdiction, versioned) | **Mocked in MVP** |
+| Core Banking Stub | External adapter | — | Core banking provisioning system (IBAN allocation, account creation) | **Stubbed in MVP** |
 
 ---
 
@@ -36,46 +39,56 @@
 
 ```
                         ┌─────────────────────────┐
-                        │   Smart Orchestration   │
-                        │         Engine          │
-                        └──┬──────┬──────┬───┬───┘
-                           │      │      │   │
-            ┌──────────────┘  ┌───┘  ┌───┘   └──────────────────┐
-            │                 │      │                           │
-            ▼                 ▼      ▼                           ▼
-     ┌────────────┐    ┌──────────┐ ┌─────────────┐     ┌──────────────┐
-     │  P1 KYB    │    │  P2 KYC  │ │P3 Compliance│     │ P4 Account   │
-     │  Service   │    │  Service │ │  Service    │     │ Service      │
-     └──────┬─────┘    └────┬─────┘ └──────┬──────┘     └──────┬───────┘
-            │               │              │                    │
-     ┌──────┴──────┐  ┌─────┴──────┐  ┌───┴──────────┐  ┌──────┴──────┐
-     │ Registry    │  │ UAE Pass   │  │ Screening    │  │ AECB        │
-     │ Adapter     │  │ Adapter    │  │ Adapter      │  │ Adapter     │
-     │ [MOCK]      │  │ OCR/Live   │  │ [MOCK]       │  │ [MOCK]      │
-     └─────────────┘  │ Adapter    │  │ Fraud        │  └─────────────┘
-                      │ [MOCK]     │  │ Adapter      │
-                      └────────────┘  │ [MOCK]       │
-                                      └──────────────┘
-            │               │              │                    │
-            └───────────────┴──────────────┴────────────────────┘
+                        │   Pillar Orchestrator   │
+                        │  (Temporal / Step Fn)   │
+                        └──┬──────────┬───────────┘
+                           │          │          │
+            ┌──────────────┘          │          └──────────────────┐
+            │                         │                             │
+            ▼                         ▼                             ▼
+     ┌────────────┐         ┌──────────────────┐      ┌────────────────────┐
+     │  KYB       │         │  KYI Service     │      │  WWMA Service      │
+     │  Service   │         │  (Know Your      │      │  (Who Will Manage  │
+     │            │         │   Individual)    │      │   the Account)     │
+     └──────┬─────┘         └────────┬─────────┘      └──────────┬─────────┘
+            │                        │                           │
+     ┌──────┴──────┐  ┌─────────────┐│  ┌──────────┐   ┌────────┴───────────┐
+     │ Registry    │  │ UAE Pass    ││  │ Nomad/   │   │ Screening Adapter  │
+     │ Adapter     │  │ Adapter     ││  │ IDfy     │   │ LSEG/DJ/ComplyAdv  │
+     │ (TAMM/DET/  │  │ (OIDC SOP3) ││  │ Adapter  │   │ [MOCK]             │
+     │  ADGM/DIFC/ │  │ [MOCK]      ││  │ [MOCK]   │   ├────────────────────┤
+     │  top zones) │  ├─────────────┘│  └──────────┘   │ Fraud Adapter      │
+     │ [MOCK]      │  │ OCR/Liveness │                  │ (Sift/Seon/Feedzai)│
+     ├─────────────┤  │ Adapter      │                  │ [MOCK]             │
+     │ KYB Intl    │  │ (Onfido /    │                  ├────────────────────┤
+     │ (Moody's /  │  │  Textract)   │                  │ AECB Adapter       │
+     │  Refinitiv/ │  │ [MOCK]       │                  │ (TTL-cached 24h)   │
+     │  D&B)       │  └──────────────┘                  │ [MOCK]             │
+     │ [MOCK]      │                                     ├────────────────────┤
+     └─────────────┘                                     │ OPA/Rego Engine    │
+                                                         │ (CRAM, EDD, expiry)│
+                                                         └────────────────────┘
+            │                        │                           │
+            └────────────────────────┴───────────────────────────┘
                                       │
                   ┌───────────────────┴───────────────────┐
                   │           Canonical Records            │
-                  │   Person DB        Business DB         │
+                  │  Person DB (CPR)   Business DB (CBR)  │
                   └───────────────────────────────────────┘
                                       │
                   ┌───────────────────┴───────────────────┐
-                  │             Audit Event Store          │
-                  │         (all services write here)      │
+                  │         Audit / Event Store            │
+                  │  (EventStoreDB / Kafka log-compacted)  │
+                  │       all services write here          │
                   └───────────────────────────────────────┘
 
  ┌─────────────────┐       ┌──────────────────────────────────────────┐
  │  Document       │◄──────│  Agent Service                           │
- │  Service        │       │  - Is doc?                               │
- │  - Upload       │       │  - Trade License processing              │
- │  - Storage      │       │  - Business Activity agent               │
- │  - Extraction   │       │  - Personal Documents OCR                │
- └────────┬────────┘       └──────────────────────────────────────────┘
+ │  Service        │       │  Group 1: Is doc? · TL processing        │
+ │  - Upload       │       │           Business Activity · Personal OCR│
+ │  - Storage      │       │  Group 2+: (post-MVP stubs only)         │
+ │  - Extraction   │       └──────────────────────────────────────────┘
+ └────────┬────────┘
           │
      ┌────┴───────────┐
      │ OCR Adapter    │
@@ -84,19 +97,25 @@
 
  ┌──────────────┐     ┌──────────────────────────────────────────────┐
  │ Applicant    │────►│  Applicant API                               │
- │ Web / App    │     │  POST /applications                          │
- │ Partner SDK  │     │  POST /documents                             │
- └──────────────┘     │  GET  /applications/:id/status              │
+ │ Web / App    │     │  POST /auth/uae-pass                         │
+ │ Partner SDK  │     │  POST /pre-screen                            │
+ └──────────────┘     │  POST /applications                          │
+                      │  POST /applications/:id/documents            │
+                      │  GET  /applications/:id/status               │
                       │  POST /applications/:id/reask-response       │
+                      │  GET  /signatories/invitation/:token         │
+                      │  POST /signatories/invitation/:token/complete│
                       └──────────────────────────────────────────────┘
 
  ┌──────────────┐     ┌──────────────────────────────────────────────┐
  │ Back Office  │────►│  Back Office API                             │
- │ UI           │     │  GET  /cases                                 │
- └──────────────┘     │  GET  /cases/:id                             │
-                      │  POST /cases/:id/reask                       │
+ │ Unified Case │     │  GET  /cases                                 │
+ │ Workspace    │     │  GET  /cases/:id  (3-pillar view)            │
+ └──────────────┘     │  POST /cases/:id/reask                       │
                       │  POST /cases/:id/decision                    │
+                      │  POST /cases/:id/escalate                    │
                       │  GET  /cases/:id/audit-log                   │
+                      │  GET  /cases/:id/audit-log/export            │
                       └──────────────────────────────────────────────┘
 ```
 
@@ -108,11 +127,15 @@
 
 | Method | Route | Description |
 |---|---|---|
-| POST | `/applications` | Create application, triggers orchestration |
-| POST | `/applications/:id/documents` | Upload a document |
-| GET | `/applications/:id/status` | Per-pillar status + next actions |
+| POST | `/auth/uae-pass` | UAE Pass OIDC callback; creates/matches CPR; returns session token |
+| POST | `/pre-screen` | Submit TL number + consent; triggers registry pull + screening; returns pre-screen outcome + tier |
+| POST | `/applications` | Create application after successful pre-screen |
+| POST | `/applications/:id/cdd-answers` | Submit 3 CDD questions (Step 03); triggers CRAM |
+| POST | `/applications/:id/documents` | Upload a document (fallback path only) |
+| GET | `/applications/:id/status` | Per-pillar status (KYB · KYI · WWMA) + next actions + ETA |
 | GET | `/applications/:id/reasks` | Fetch open re-ask items |
 | POST | `/applications/:id/reask-response` | Submit response to a re-ask |
+| POST | `/applications/:id/activate` | Trigger e-signature + activation (Step 06) |
 | GET | `/signatories/invitation/:token` | Load signatory invitation context |
 | POST | `/signatories/invitation/:token/complete` | Submit signatory KYC |
 
@@ -142,14 +165,14 @@
 ## External Adapter Contracts (MVP: all return mock data)
 
 ### Registry Adapter
-- **Input:** trade_license_number, authority (ded_ad, det_dubai, adgm, difc, moec, free_zone)
-- **Output:** company_name, entity_type, activities, expiry_date, owners, is_valid, status
-- **Mock:** returns hardcoded valid TL data for any input
+- **Input:** trade_license_number, authority (tamm_added, det_dubai, adgm, difc, moec, dmcc, jafza, rak_icc, uaq_ftz, shams)
+- **Output:** legal_name_ar, legal_name_en, entity_type, isic_activities, expiry_date, owners_list, registered_address, license_status, is_valid
+- **Mock:** returns hardcoded valid TL data for any input; configurable to return expired/suspended for testing
 
 ### UAE Pass Adapter
-- **Input:** redirect flow or token
-- **Output:** emirates_id, full_name, date_of_birth, nationality, liveness_score
-- **Mock:** returns a preset verified identity
+- **Input:** OIDC authorization code (SOP3 / High Assurance flow)
+- **Output:** uae_pass_id, emirates_id, full_name_ar, full_name_en, date_of_birth, nationality, mobile, email, assurance_level
+- **Mock:** returns a preset verified UAE national identity
 
 ### OCR / Liveness Adapter
 - **Input:** document image or video
@@ -195,30 +218,41 @@ All events are written to the Audit/Event Store with this envelope:
 
 | Event Type | Emitted By | Trigger |
 |---|---|---|
-| `application.created` | Orchestration | Application record created |
-| `application.tier_assigned` | Orchestration | Tier determined from TL + entity type |
+| `auth.uae_pass.completed` | Applicant API | UAE Pass OIDC flow completed; CPR created or matched |
+| `application.pre_screen.eligible` | WWMA Service | Pre-screen result: eligible |
+| `application.pre_screen.needs_review` | WWMA Service | Pre-screen result: needs review |
+| `application.pre_screen.cannot_proceed` | WWMA Service | Pre-screen result: blocked (no tipping off on reason) |
+| `application.created` | Orchestrator | Application record created after pre-screen pass |
+| `application.cram_computed` | WWMA Service | CRAM score + tier assigned; policy_version logged |
+| `application.edd_triggered` | WWMA Service | EDD questionnaire triggered by CRAM/sector |
+| `application.tier_assigned` | Orchestrator | Tier (express/standard/complex) finalised at Step 03 |
 | `application.submitted` | Applicant API | Applicant confirms submission |
-| `document.uploaded` | Document Service | Document received |
+| `document.uploaded` | Document Service | Document received (fallback path) |
 | `agent.run.dispatched` | Agent Service | Agent dispatched |
-| `agent.run.completed` | Agent Service | Agent finished with verdict |
-| `pillar.kyb.started` | P1 KYB | Pillar begins processing |
-| `pillar.kyb.passed` | P1 KYB | All KYB checks clear |
-| `pillar.kyb.flagged` | P1 KYB | One or more checks flagged |
-| `pillar.kyc.started` | P2 KYC | — |
-| `pillar.kyc.passed` | P2 KYC | — |
-| `pillar.kyc.flagged` | P2 KYC | — |
-| `pillar.compliance.started` | P3 Compliance | — |
-| `pillar.compliance.passed` | P3 Compliance | — |
-| `pillar.compliance.flagged` | P3 Compliance | — |
-| `pillar.account.iban_reserved` | P4 Account | IBAN pre-reserved |
-| `pillar.account.activated` | P4 Account | Account flipped to active |
-| `signatory.invited` | P2 KYC | Invitation link sent |
-| `signatory.completed` | P2 KYC | Signatory completed KYC |
+| `agent.run.completed` | Agent Service | Agent finished with verdict + policy_version |
+| `pillar.kyb.started` | KYB Service | Pillar begins processing |
+| `pillar.kyb.registry_fetched` | KYB Service | Registry pull completed |
+| `pillar.kyb.passed` | KYB Service | All KYB checks clear |
+| `pillar.kyb.flagged` | KYB Service | One or more checks flagged |
+| `pillar.kyi.started` | KYI Service | — |
+| `pillar.kyi.passed` | KYI Service | All people verified |
+| `pillar.kyi.flagged` | KYI Service | — |
+| `pillar.wwma.started` | WWMA Service | — |
+| `pillar.wwma.iban_reserved` | WWMA Service | IBAN pre-reserved in pending_activation |
+| `pillar.wwma.passed` | WWMA Service | All WWMA checks clear |
+| `pillar.wwma.flagged` | WWMA Service | — |
+| `pillar.wwma.account_activated` | WWMA Service | Account flipped to active; T2FT recorded |
+| `signatory.invited` | KYI Service | Tokenised UAE Pass deep-link sent |
+| `signatory.completed` | KYI Service | Signatory completed KYI |
+| `screening.pep_match` | WWMA Service | PEP match found — mandatory Compliance review triggered |
+| `screening.sanctions_match` | WWMA Service | Sanctions match — application frozen; STR to be filed by MLRO |
 | `reask.sent` | Back Office API | Re-ask sent to applicant |
 | `reask.responded` | Applicant API | Applicant responded |
+| `case.officer_assigned` | Back Office API | Named Case Officer assigned |
 | `case.maker_started` | Back Office API | Maker opens case |
 | `case.maker_completed` | Back Office API | Maker submits decision |
 | `case.checker_completed` | Back Office API | Checker validates or overrides |
-| `case.escalated` | Back Office API | Case escalated to manager |
+| `case.escalated` | Back Office API | Case escalated to Compliance Manager / MLRO |
 | `case.approved` | Back Office API | Final approval recorded |
 | `case.declined` | Back Office API | Final decline recorded |
+| `account.first_transaction_completed` | Transaction Monitor | T2FT milestone recorded |

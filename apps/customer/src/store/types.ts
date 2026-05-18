@@ -1,70 +1,59 @@
+// Six customer-visible steps per CLAUDE_BRIEFING.md:
+// 01 uae-pass → 02 find-business → 03 business-questions → 04 who-needs-access
+// → 05 tracker → 06 activate
+// Step 04 is skipped entirely for Tier 1 (Sole Establishment).
 export type WizardStep =
-  | 'start'
-  | 'license'         // License fields confirmation
-  | 'activities'      // Business activities — select primary, edit/add/remove
-  | 'ownership'       // Ownership structure + KYC invites
-  | 'business-model'  // AI business model summary + turnover + countries
-  | 'documents'
-  | 'review'
-  | 'status'
+  | 'uae-pass'           // Step 01: UAE Pass sign-in
+  | 'find-business'      // Step 02: TL number entry → registry pull → pre-screen result
+  | 'business-questions' // Step 03: 3 mandatory CDD questions → CRAM
+  | 'who-needs-access'   // Step 04: UBO/signatory management (Tier 2/3 only)
+  | 'tracker'            // Step 05: 3-lane per-pillar progress tracker
+  | 'activate'           // Step 06: e-sign + account activation
 
-export type DocStatus = 'pending' | 'uploading' | 'uploaded' | 'verified' | 'rejected'
+export type PreScreenResult = 'eligible' | 'needs_review' | 'cannot_proceed'
 
 export type DocumentKind = 'business_license' | 'freelancer_permit'
 
-export interface ExtractedOwner {
+export type CramScore = 'low' | 'medium' | 'high'
+
+export interface RegistryBusiness {
+  licensingAuthority: string
+  licenseNumber: string
+  legalType: string
+  tradeName: string
+  legalNameAr?: string
+  issueDate: string
+  licenseExpiry: string
+  registeredAddress: string
+  commercialActivities: string[]
+  owners: RegistryOwner[]
+  entityType: string
+  jurisdiction: string
+}
+
+export interface RegistryOwner {
   name: string
   ownership: number
   nationality?: string
 }
 
-export interface ExtractedBusiness {
-  documentKind: DocumentKind
-  licensingAuthority: string
-  licenseNumber: string
-  legalType: string
-  tradeName: string
-  issueDate: string
-  licenseExpiry: string
-  registeredAddress: string
-  commercialActivities: string[]
-  owners: ExtractedOwner[]
-}
-
-// Scalar fields the user can edit inline on the License Details screen
-export type EditableBusinessField =
-  | 'licensingAuthority'
-  | 'licenseNumber'
-  | 'legalType'
-  | 'tradeName'
-  | 'issueDate'
-  | 'licenseExpiry'
-  | 'registeredAddress'
-
-export interface Shareholder {
+export interface Signatory {
   id: string
   fullName: string
-  role: 'owner' | 'shareholder' | 'signatory' | 'authorized_signatory'
+  role: 'owner' | 'ubo' | 'signatory' | 'director' | 'authorized_user'
   ownership?: number
   nationality: string
   emiratesId?: string
-  kycStatus: 'pending' | 'invited' | 'in_progress' | 'passed' | 'failed'
+  kyiStatus: 'pending' | 'invited' | 'in_progress' | 'passed' | 'failed'
   email?: string
 }
 
-export interface DocumentSlot {
-  id: string
-  name: string
-  description?: string
-  required: boolean
-  status: DocStatus
-  fileName?: string
-}
+export type PillarId = 'kyb' | 'kyi' | 'wwma'
 
 export type PillarRunStatus = 'idle' | 'running' | 'pending_info' | 'passed' | 'failed' | 'escalated'
 
 export interface PillarState {
-  id: string
+  id: PillarId
   label: string
   description: string
   status: PillarRunStatus
@@ -76,21 +65,31 @@ export interface ApplicationState {
   applicationId: string | null
   step: WizardStep
   tier: 'express' | 'standard' | 'complex' | null
-  documentKind: DocumentKind | null
-  requiresMoa: boolean
-  tlScanned: boolean
-  business: ExtractedBusiness | null
-  // Mutable activities list — may differ from business.commercialActivities after user edits
-  activities: string[]
-  primaryActivityIndex: number
-  // Business model screen
-  businessModelSummary: string | null
-  businessModelLoading: boolean
+
+  // Step 01 — UAE Pass
+  uaePassVerified: boolean
+  personName: string | null
+
+  // Step 02 — Find business
+  licenseNumber: string
+  preScreenResult: PreScreenResult | null
+  preScreenLoading: boolean
+  business: RegistryBusiness | null
+
+  // Step 03 — Business questions (3 mandatory CDD questions)
+  primaryActivity: string
   expectedMonthlyTurnover: string
-  countriesOfOperation: string
-  shareholders: Shareholder[]
-  documents: DocumentSlot[]
+  sourceOfFunds: string
+  cramScore: CramScore | null
+  eddTriggered: boolean
+
+  // Step 04 — Who needs access (Tier 2/3 only)
+  signatories: Signatory[]
+
+  // Step 05 — Tracker
   pillars: PillarState[]
+
+  // Submission state
   submitting: boolean
   submitted: boolean
   error: string | null
@@ -98,30 +97,23 @@ export interface ApplicationState {
 
 export type ApplicationAction =
   | { type: 'SET_STEP'; step: WizardStep }
-  | { type: 'SET_DOCUMENT_KIND'; documentKind: DocumentKind }
-  | { type: 'SET_TL_SCANNED' }
-  | { type: 'SET_EXTRACTED_BUSINESS'; business: ExtractedBusiness; tier: 'express' | 'standard' | 'complex'; requiresMoa: boolean }
-  | { type: 'UPDATE_BUSINESS_FIELD'; field: EditableBusinessField; value: string }
-  // Activity actions
-  | { type: 'SET_PRIMARY_ACTIVITY'; index: number }
-  | { type: 'UPDATE_ACTIVITY'; index: number; value: string }
-  | { type: 'ADD_ACTIVITY'; activity: string }
-  | { type: 'REMOVE_ACTIVITY'; index: number }
-  // Business model actions
-  | { type: 'SET_BUSINESS_MODEL_LOADING'; loading: boolean }
-  | { type: 'SET_BUSINESS_MODEL_SUMMARY'; summary: string }
-  | { type: 'UPDATE_BUSINESS_MODEL_SUMMARY'; summary: string }
+  // Step 01
+  | { type: 'SET_UAE_PASS_VERIFIED'; name: string }
+  // Step 02
+  | { type: 'SET_LICENSE_NUMBER'; value: string }
+  | { type: 'SET_PRE_SCREEN_LOADING'; loading: boolean }
+  | { type: 'SET_PRE_SCREEN_RESULT'; result: PreScreenResult; business: RegistryBusiness; tier: 'express' | 'standard' | 'complex' }
+  // Step 03
+  | { type: 'UPDATE_PRIMARY_ACTIVITY'; value: string }
   | { type: 'UPDATE_TURNOVER'; value: string }
-  | { type: 'UPDATE_COUNTRIES'; value: string }
-  // Shareholder actions
-  | { type: 'ADD_SHAREHOLDER'; shareholder: Shareholder }
-  | { type: 'UPDATE_SHAREHOLDER'; id: string; updates: Partial<Shareholder> }
-  | { type: 'UPDATE_SHAREHOLDER_STATUS'; id: string; status: Shareholder['kycStatus'] }
-  | { type: 'REMOVE_SHAREHOLDER'; id: string }
-  // Document actions
-  | { type: 'UPDATE_DOCUMENT_STATUS'; id: string; status: DocStatus; fileName?: string }
-  // Submission
+  | { type: 'UPDATE_SOURCE_OF_FUNDS'; value: string }
+  | { type: 'SET_CRAM_RESULT'; score: CramScore; eddTriggered: boolean }
+  // Step 04
+  | { type: 'ADD_SIGNATORY'; signatory: Signatory }
+  | { type: 'UPDATE_SIGNATORY_STATUS'; id: string; status: Signatory['kyiStatus'] }
+  | { type: 'REMOVE_SIGNATORY'; id: string }
+  // Submission / pillar tracking
   | { type: 'SET_SUBMITTING'; submitting: boolean }
   | { type: 'SET_SUBMITTED'; applicationId: string }
-  | { type: 'SET_PILLAR_STATE'; id: string; state: Partial<PillarState> }
+  | { type: 'SET_PILLAR_STATE'; id: PillarId; state: Partial<PillarState> }
   | { type: 'SET_ERROR'; error: string | null }

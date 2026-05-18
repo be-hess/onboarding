@@ -3,22 +3,20 @@ import { StepProgress } from '@wio/design-system/src/components'
 import type { WizardStep } from '../store/types'
 
 const STEPS = [
-  { label: 'License', sublabel: 'Details' },
-  { label: 'Activities', sublabel: '& Model' },
-  { label: 'Ownership', sublabel: 'Structure' },
-  { label: 'Documents', sublabel: 'Upload' },
-  { label: 'Review', sublabel: '& Submit' },
+  { label: 'Find', sublabel: 'Business' },
+  { label: 'Business', sublabel: 'Questions' },
+  { label: 'Who Needs', sublabel: 'Access' },
+  { label: 'Track', sublabel: 'Progress' },
+  { label: 'Activate', sublabel: 'Account' },
 ]
 
 const STEP_INDEX: Record<WizardStep, number> = {
-  start: -1,
-  license: 0,
-  activities: 1,
-  ownership: 2,
-  'business-model': 2,
-  documents: 3,
-  review: 4,
-  status: 5,
+  'uae-pass': -1,
+  'find-business': 0,
+  'business-questions': 1,
+  'who-needs-access': 2,
+  'tracker': 3,
+  'activate': 4,
 }
 
 interface ApplicationLayoutProps {
@@ -30,7 +28,7 @@ interface ApplicationLayoutProps {
 
 export function ApplicationLayout({ currentStep, title, subtitle, children }: ApplicationLayoutProps) {
   const stepIndex = STEP_INDEX[currentStep]
-  const showProgress = stepIndex >= 0 && currentStep !== 'status'
+  const showProgress = stepIndex >= 0
 
   return (
     <div className="app-shell">

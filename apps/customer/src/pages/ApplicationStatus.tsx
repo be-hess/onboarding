@@ -1,8 +1,8 @@
-import { PillarStatusCard, Badge } from '@wio/design-system/src/components'
+import { Button, PillarStatusCard, Badge } from '@wio/design-system/src/components'
 import { useApplication } from '../hooks'
 
-export function ApplicationStatus() {
-  const { state } = useApplication()
+export function ApplicationTracker() {
+  const { state, goTo } = useApplication()
   const { applicationId, pillars, business, tier } = state
 
   const allPassed = pillars.every(p => p.status === 'passed')
@@ -16,7 +16,7 @@ export function ApplicationStatus() {
 
   const OVERALL_LABEL = {
     processing: 'Application in review',
-    approved: 'Application approved',
+    approved: 'All checks complete',
     action_needed: 'Action needed',
     declined: 'Application not approved',
   }
@@ -54,7 +54,7 @@ export function ApplicationStatus() {
 
           {applicationId && (
             <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>
-              Application reference: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{applicationId}</strong>
+              Ref: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{applicationId}</strong>
             </p>
           )}
 
@@ -64,46 +64,47 @@ export function ApplicationStatus() {
 
           {tier && (
             <div style={{ marginTop: 8 }}>
-              <Badge variant={tier}>{tier.charAt(0).toUpperCase() + tier.slice(1)} application</Badge>
+              <Badge variant={tier as 'express' | 'standard' | 'complex'}>{tier.charAt(0).toUpperCase() + tier.slice(1)}</Badge>
             </div>
           )}
         </div>
 
-        {allPassed ? (
-          <div className="card slide-up" style={{ marginBottom: 24, textAlign: 'center', padding: '40px 24px' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
-            <h2 style={{ margin: '0 0 8px', color: 'var(--success)' }}>Your account is ready</h2>
+        {/* 3-lane pillar tracker: KYB · KYI · WWMA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+          {pillars.map(pillar => (
+            <PillarStatusCard
+              key={pillar.id}
+              pillar={pillar.id}
+              label={pillar.label}
+              description={pillar.description}
+              status={pillar.status}
+              progress={pillar.progress}
+              eta={pillar.eta}
+            />
+          ))}
+        </div>
+
+        {/* CTA when all passed */}
+        {allPassed && (
+          <div className="card slide-up" style={{ marginBottom: 24, textAlign: 'center', padding: '32px 24px' }}>
+            <h2 style={{ margin: '0 0 8px', color: 'var(--success)' }}>All checks passed</h2>
             <p style={{ color: 'var(--text-muted)', margin: '0 0 24px' }}>
-              Congratulations! Your Wio Business account has been approved. Check your email for next steps.
+              Your application is approved. Complete the final step to activate your Wio Business account.
             </p>
-            <a href="https://wio.io" className="btn btn-primary">
-              Access your account
-            </a>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {pillars.map(pillar => (
-              <PillarStatusCard
-                key={pillar.id}
-                pillar={pillar.id}
-                label={pillar.label}
-                description={pillar.description}
-                status={pillar.status}
-                progress={pillar.progress}
-                eta={pillar.eta}
-              />
-            ))}
+            <Button onClick={() => goTo('activate')} style={{ minWidth: 200 }}>
+              Activate your account →
+            </Button>
           </div>
         )}
 
         {!allPassed && (
-          <div className="card" style={{ marginTop: 24 }}>
+          <div className="card">
             <h3 className="section-label">What happens next?</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
-                { step: '1', text: 'Our AI agents are running automated checks on your application.' },
-                { step: '2', text: 'If any documents or information need clarification, we\'ll notify you by email.' },
-                { step: '3', text: 'A Wio specialist will review your application. You\'ll be notified of the outcome.' },
+                { step: '1', text: 'KYB · KYI · WWMA checks run simultaneously in three independent lanes.' },
+                { step: '2', text: 'If any information needs clarification, we\'ll notify you here and by email.' },
+                { step: '3', text: 'Once all three lanes pass, you\'ll be invited to activate your account.' },
               ].map(item => (
                 <div key={item.step} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <div style={{

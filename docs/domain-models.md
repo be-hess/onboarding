@@ -1,7 +1,7 @@
 # Domain Models: Wio Business SME Onboarding
 
-**Version:** 0.1 (MVP)
-**Date:** 2026-05-08
+**Version:** 0.2
+**Date:** 2026-05-18
 
 ---
 
@@ -12,7 +12,8 @@ Application ──────────────────── Busines
      │                                    │
      │                           PersonBusinessRole
      │                                    │
-     ├── PillarStatus (×4)          Person (Canonical Person Record)
+     ├── PillarStatus (×3)          Person (Canonical Person Record)
+     │   kyb · kyi · wwma
      │
      ├── Document (×N)
      │       └── AgentRun
@@ -45,6 +46,13 @@ The root record for a single onboarding attempt by one business.
 | `status` | enum | `draft` · `in_progress` · `pending_review` · `approved` · `declined` · `cancelled` |
 | `jurisdiction` | string | e.g. `uae_mainland` · `adgm` · `difc` · `rak_icc` |
 | `requires_moa` | bool | Derived from `document_kind`: true for `business_license`, false for `freelancer_permit` |
+| `pre_screen_result` | enum | nullable; `eligible` · `needs_review` · `cannot_proceed` — set at Step 02 |
+| `cram_score` | enum | nullable; `low` · `medium` · `high` — computed at Step 03 by OPA/Rego |
+| `cram_policy_version` | string | The OPA/Rego policy version ID used to produce `cram_score` |
+| `edd_triggered` | bool | True if CRAM output or sector triggered an EDD questionnaire |
+| `fatca_crs_classification` | enum | nullable; `active_nffe` · `passive_nffe` · `fi` — derived at Step 03 |
+| `plan_recommendation` | string | nullable; suggested plan from product fit recommender at Step 03 |
+| `t2ft_at` | timestamp | nullable; set when first outgoing or incoming transaction completes |
 | `submitted_at` | timestamp | Set when applicant confirms submission |
 | `decision_at` | timestamp | Set on final approve/decline |
 | `created_at` | timestamp | |
@@ -87,6 +95,9 @@ A single source of truth for a legal entity. Created once; shared across pillars
 | `ubo_graph` | JSON | Ownership tree: nodes (Person/Entity) + edges (ownership_pct, role); extracted from TL owners list in MVP |
 | `registry_data_source` | enum | `registry_api` · `document_upload` · `manual` |
 | `registry_data_fetched_at` | timestamp | |
+| `kyb_score` | decimal | Continuous KYB score 0–100: jurisdiction risk + sector risk + age + activities count + ownership depth |
+| `kyb_score_computed_at` | timestamp | |
+| `ubo_resolution_source` | enum | nullable; `uae_registry` · `moodys_kyb` · `refinitiv` · `dun_bradstreet` · `manual` |
 | `created_at` | timestamp | |
 | `updated_at` | timestamp | |
 
@@ -133,8 +144,16 @@ A single source of truth for a natural person. Created once and reused across al
 | `is_pep` | bool | nullable until screened |
 | `is_sanctioned` | bool | nullable until screened |
 | `screening_last_run_at` | timestamp | |
+| `screening_policy_version` | string | OPA/Rego policy version in force at last screening run |
+| `aecb_status` | enum | nullable; `clear` · `flagged` · `blocked` — TTL-cached 24h |
+| `aecb_checked_at` | timestamp | |
 | `created_at` | timestamp | |
 | `updated_at` | timestamp | |
+
+**Notes:**
+- `uae_pass_id` is the primary deduplication key for UAE residents. When a Person is identified (Step 01 or signatory invite), the system looks for an existing CPR with a matching `uae_pass_id` before creating a new record.
+- If an existing CPR is found with fresh KYC (<12 months), it is offered for reuse with **explicit new consent** per PDPL — never auto-imported.
+- For non-UAE residents, `passport_number` + `passport_country` serves as the deduplication key.
 
 ---
 
@@ -171,7 +190,7 @@ Tracks the state of each pillar independently per application.
 |---|---|---|
 | `id` | UUID | |
 | `application_id` | UUID FK → Application | |
-| `pillar` | enum | `kyb` · `kyc` · `compliance` · `account` |
+| `pillar` | enum | `kyb` · `kyi` · `wwma` |
 | `status` | enum | `not_started` · `in_progress` · `passed` · `flagged` · `failed` · `awaiting_input` · `expired` |
 | `started_at` | timestamp | |
 | `completed_at` | timestamp | |
@@ -213,7 +232,7 @@ Records a single execution of a named agent, its inputs, outputs, and verdict.
 | `id` | UUID | |
 | `application_id` | UUID FK → Application | |
 | `agent_name` | enum | `is_doc` · `tl_processing` · `business_activity` · `personal_ocr` · `moa_digestion` · `powers_resolution` · `edd_agent` · `public_domain_search` · `reask_agent` · `corporate_structure` · `shareholders_kyc` · `signing_powers_kyc` · `mandates` · `ai_rm` · `maker_agent` · `checker_agent` · `edd_maker` · `edd_checker` · `quality_agent` · `escalations_agent` |
-| `pillar` | enum | Which pillar this agent serves |
+| `pillar` | enum | `kyb` · `kyi` · `wwma` — which pillar this agent serves |
 | `delivery_group` | enum | `group_1` · `group_2` · `group_3` |
 | `status` | enum | `pending` · `running` · `completed` · `failed` |
 | `input` | JSON | Snapshot of input data at time of run |
@@ -322,7 +341,7 @@ Application
   ├── 1   Person (applicant)
   ├── N   PersonBusinessRole         (all people involved: owners, signatories, UBOs)
   │         └── 1 Person             (reused from Canonical Person DB)
-  ├── 4   PillarStatus               (one per pillar, independent lifecycle)
+  ├── 3   PillarStatus               (one per pillar: kyb · kyi · wwma, independent lifecycle)
   ├── N   Document
   │         └── 0..1 AgentRun        (the run that validated/extracted this doc)
   ├── N   AgentRun                   (all agent runs for this application)
@@ -338,8 +357,17 @@ Application
 ### Application / Entity Types
 `sole_establishment` · `llc` · `free_zone_llc` · `free_zone_est` · `corporate_group` · `branch` · `ngo`
 
-### Pillar
-`kyb` · `kyc` · `compliance` · `account`
+### Pillar (3-pillar model)
+`kyb` · `kyi` · `wwma`
+
+### Pre-Screen Result
+`eligible` · `needs_review` · `cannot_proceed`
+
+### CRAM Score
+`low` · `medium` · `high`
+
+### FATCA/CRS Classification
+`active_nffe` · `passive_nffe` · `fi`
 
 ### Pillar / Application Status
 `not_started` · `draft` · `in_progress` · `passed` · `flagged` · `failed` · `awaiting_input` · `pending_review` · `approved` · `declined` · `expired` · `cancelled`
@@ -350,5 +378,8 @@ Application
 ### Document Type
 `trade_license` · `moa` · `board_resolution` · `emirates_id` · `passport` · `proof_of_address` · `powers_of_attorney` · `shareholder_register` · `audited_financials` · `edd_response` · `other`
 
-### Trade License Authority
-`ded_ad` · `det_dubai` · `adgm` · `difc` · `moec` · `uaq_ftz` · `rak_icc` · `jafza` · `dmcc` · `other_free_zone` · `other`
+### Trade License / Registry Authority
+`tamm_added` · `det_dubai` · `adgm` · `difc` · `moec` · `dmcc` · `jafza` · `rak_icc` · `uaq_ftz` · `shams` · `other_free_zone` · `other`
+
+### AECB Status
+`clear` · `flagged` · `blocked`

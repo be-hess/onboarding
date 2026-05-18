@@ -1,101 +1,124 @@
 # User Flows: Wio Business SME Onboarding
 
-**Version:** 0.1 (MVP)
-**Date:** 2026-05-08
+**Version:** 0.2
+**Date:** 2026-05-18
 
 ---
 
 ## Flow Index
 
-1. [Tier 1 — Express Onboarding (Freelancer Permit / Sole Est.)](#flow-1--tier-1-express-onboarding-freelancer-permit--sole-establishment)
+1. [Tier 1 — Express Onboarding (Sole Establishment)](#flow-1--tier-1-express-onboarding-sole-establishment)
 2. [Tier 2 — Standard Onboarding (LLC)](#flow-2--tier-2-standard-onboarding-llc)
-3. [Signatory Self-Serve Verification](#flow-3--signatory-self-serve-verification)
-4. [Back Office — Maker Review](#flow-4--back-office--maker-review)
+3. [Signatory Self-Serve Verification (KYI Pillar)](#flow-3--signatory-self-serve-verification-kyi-pillar)
+4. [Back Office — Maker Review (Unified Case Workspace)](#flow-4--back-office--maker-review-unified-case-workspace)
 5. [Back Office — Checker Validation](#flow-5--back-office--checker-validation)
 6. [Re-Ask Response (Applicant)](#flow-6--re-ask-response-applicant)
 7. [Auditor — Audit Trail Access](#flow-7--auditor--audit-trail-access)
 
 ---
 
-## Flow 1 — Tier 1: Express Onboarding (Freelancer Permit / Sole Establishment)
+## Flow 1 — Tier 1: Express Onboarding (Sole Establishment)
 
-**Who:** A UAE freelancer (freelancer permit) or sole proprietor (sole establishment license). Single owner, single authorised signatory — same person.
+**Who:** A UAE sole proprietor or freelancer. Single owner, no additional UBOs or signatories.
 **Target:** Account active in < 1 hour.
 **Automation:** Fully automated — no human review if all signals are clean.
-**Key difference from Tier 2:** No MOA is required. License type is confirmed at step 1.
+**Key difference from Tier 2:** Step 04 (Who needs access?) is skipped entirely. No MOA, no signatory invitations.
 
 ```
-Applicant                          System / Agents
+Applicant                          System / Services
 ────────────────────────────────   ─────────────────────────────────────────
-1. Opens Wio Business app or web
-   Selects document type:
-   [Business License] or
-   [Freelancer Permit]           → Document kind stored in application state
-   → Selects "Freelancer Permit"
 
-2. Uploads / scans Freelancer      → Is doc? agent validates file type
-   Permit                         → TL processing agent:
-                                       checks validity with issuing authority
-                                       [MOCK]
-                                       extracts all 8 fields:
-                                         Licensing Authority
-                                         License Number
-                                         Legal Type / Form
-                                         Trade Name / Permit Holder Name
-                                         Issue Date
-                                         Expiry Date
-                                         Commercial Activities
-                                         Address
-                                         Owner (single, 100%)
-                                       checks for duplicate in Wio system
+── STEP 01 — Sign in with UAE Pass ──────────────────────────────────────────
 
-                                   → No MOA requested (documentKind =
-                                       freelancer_permit → requiresMoa = false)
-                                   → Tier classified = express
+1. Opens Wio Business app or web   → UAE Pass OIDC flow (SOP3 / High Assurance)
+   Taps "Sign in with UAE Pass"        [MOCK]
+                                       CPR hydrated: verified EID, legal name
+                                       (AR/EN), DOB, nationality, mobile, email.
+                                       Device fingerprint bound to session.
+                                       Continuous fraud stream starts (Sift/
+                                       Seon/Feedzai) [MOCK]
+                                   → If existing Wio Personal CPR with fresh
+                                       KYC (<12 months): offered for reuse
+                                       with explicit new consent — never auto-
+                                       imported.
 
-3. Sees pre-filled Business        → Business Activity agent:
-   Details screen:                     maps activities to compliance list
-   - All 8 extracted fields        → Orchestration Engine:
-   - Single owner listed               starts P1, P2, P3, P4 in parallel
-   Reviews and corrects if needed
+── STEP 02 — Find your business ────────────────────────────────────────────
 
-4. Answers 3 upfront questions:
-   - Main business activities (free text)
-   - Expected monthly turnover (range)
-   - Where will you transact? (regions)
+2. Enters trade licence number     → KYB Service: TAMM/DET/ADGM registry pull
+   Reviews consent screen              [MOCK] returns: legal name (AR/EN),
+   Taps "I agree, continue"            licence type, expiry, ISIC activities,
+                                       owner list (single owner 100%), address.
+                                   → WWMA Service (parallel, ~60s):
+                                       ✓ Sanctions screening (LSEG/DJ/
+                                         ComplyAdvantage) [MOCK]
+                                       ✓ PEP + adverse media screening [MOCK]
+                                       ✓ AECB pre-check on EID + TL [MOCK]
+                                       ✓ Internal Wio block list check
+                                       ✓ KYB Score computed
+                                   → WWMA Service: IBAN reserved in
+                                       pending_activation state (pre-
+                                       provisioning begins now)
 
-5. Scans Emirates ID               → Personal Documents OCR agent:
-                                       extracts name, DOB, EID number
-                                   → UAE Pass auth [MOCK]:
-                                       validates identity + liveness
+3. Pre-screen result displayed:    ── Pre-screen outcomes ──────────────────
+   ✓ Eligible                       → Tier shown: "Express path (~5 min)"
+     Tier + estimated T2FT shown       Estimated T2FT: < 1 hour
+   ⚠ Needs review → reason shown
+   ✗ Cannot proceed → compliant
+     reason (no tipping off on
+     sanctions matches)
 
-6. Reviews pre-filled personal     ┌──────────────────────────────────────┐
-   details and confirms            │ P1 KYB: registry data populated      │
-                                   │ P2 KYC: EID + liveness verified      │
-7. "All done — we're checking      │ P3 Compliance: AML/PEP clean [MOCK]  │
-    your details"                  │         CRAM computed                │
-   Real-time pillar progress       │         Fraud score = pass [MOCK]    │
-   tracker shown                   │ P4 Account: AECB clear [MOCK]        │
-                                   │           IBAN reserved              │
-                                   └──────────────────────────────────────┘
+── STEP 03 — Tell us about your business ───────────────────────────────────
 
-                                   → All 4 pillars pass
-                                   → Orchestration Engine:
-                                       CaseReview auto-created (actor = system)
-                                       Application status = approved
-                                       Account status flipped to active
-                                       AuditEvent: application.approved (system)
+4. Answers 3 mandatory questions:  → WWMA Service: CRAM engine (OPA/Rego)
+   1. Primary business activity        computes risk: Low/Medium/High
+      (ISIC chips, pre-selected    → Result pinned to policy version ID
+       from registry data)         → EDD trigger evaluated: no extra
+   2. Expected monthly turnover         questions for standard sector
+      (range selector)             → FATCA/CRS classification derived:
+   3. Source of funds                   Active NFFE (auto-derived from registry)
+                                   → Tier 1 confirmed:
+                                       Sole Est + Low CRAM + UAE national +
+                                       standard sector → express path
+                                       Step 04 SKIPPED
 
-8. Receives: "Your account is      → Notification sent (email + push)
-   ready. Start banking."          → Virtual card issued
-   Sees IBAN, virtual card         → AuditEvent: pillar.account.activated
+── STEP 05 — Track everything (Step 04 skipped for Tier 1) ─────────────────
+
+5. Sees 3-lane tracker:            ┌────────────────────────────────────────┐
+   KYB  ████████████  ✓ Passed     │ KYB:  Registry data clean              │
+   KYI  ████████████  ✓ Passed     │       Single owner verified via UAE Pass│
+   Acct ████████████  ✓ Passed     │ KYI:  UAE Pass liveness passed [MOCK]  │
+                                   │ WWMA: AML/PEP clean · AECB clear       │
+                                   │       CRAM: Low · No EDD               │
+                                   │       IBAN reserved · account pending  │
+                                   └────────────────────────────────────────┘
+                                   → All 3 pillars pass
+                                   → Orchestrator: CaseReview auto-created
+                                       (actor = system, status = approved)
+                                   → Application status = approved
+
+── STEP 06 — Activate and move money ───────────────────────────────────────
+
+6. Prompted to e-sign:             → UAE Pass digital signature
+   · FATCA/CRS self-cert             (Federal Decree-Law 46/2021)
+   · Account Agreement + KFS       → WWMA Service: state flip
+   · T&Cs                            pending_activation → active
+                                   → Fee schedule activated
+                                   → Virtual card personalised
+                                   → Transaction monitoring engine subscribes
+                                   → T2FT timestamp recorded
+
+7. "Your Wio Business account      → Notification sent (email)
+    is ready. Start banking."      → AuditEvent: pillar.wwma.account_activated
+   Sees IBAN, virtual card         → AuditEvent: account.first_transaction_
+   Activation time < 1 hour           completed (on first txn)
 ```
 
 **Decision points:**
-- If `is doc?` fails → applicant prompted to re-upload with guidance
-- If TL expired or suspended → application halted with explanation; support contact shown
-- If duplicate business found → applicant routed to existing account recovery flow
-- If any pillar flags → tier upgraded to `standard`; enters back office queue
+- If UAE Pass auth fails → Onfido passport + liveness fallback track
+- If registry returns expired/suspended licence → application halted; support contact shown
+- If duplicate business in Wio system → routed to existing account recovery flow
+- If any pillar flags → tier upgraded to `standard`; Case Officer assigned; enters Unified Case Workspace
+- If sanctions/PEP hit → hard stop; "We're unable to continue at this time. Our Compliance team will contact you within 5 business days." MLRO notified separately.
 
 ---
 
@@ -104,121 +127,108 @@ Applicant                          System / Agents
 **Who:** A UAE LLC with 1–3 UAE shareholders, standard ownership structure.
 **Target:** Decision within 24 hours.
 **Automation:** Agents handle all checks; human (Maker/Checker) reviews flagged items or makes final decision.
-**Key difference from Tier 1:** MOA is required. Prompted immediately after Trade License scan (before Business Details).
+**Key difference from Tier 1:** Step 04 is active — UBO list shown, signatories invited.
 
 ```
-Applicant                          System / Agents
+Applicant                          System / Services
 ────────────────────────────────   ─────────────────────────────────────────
-1. Opens Wio Business app or web
-   Selects document type:
-   → Selects "Business License"  → Document kind stored in application state
 
-2. Uploads / scans Trade License   → Is doc? agent validates file type
-                                   → TL processing agent:
-                                       checks validity with registry [MOCK]
-                                       extracts all 8 fields:
-                                         Licensing Authority
-                                         License Number
-                                         Legal Type / Form (LLC)
-                                         Trade Name
-                                         Issue Date
-                                         Expiry Date
-                                         Commercial Activities
-                                         Address
-                                         Owners list with % ownership
-                                       checks for duplicate in Wio system
+── STEP 01 — Sign in with UAE Pass ──────────────────────────────────────────
 
-                                   → documentKind = business_license
-                                       → requiresMoa = true
-                                   → Orchestration Engine:
-                                       tier = standard (LLC, 2+ owners)
+1. Opens Wio Business app or web   → Same as Tier 1 Step 01
+   Taps "Sign in with UAE Pass"       UAE Pass OIDC [MOCK] → CPR hydrated
 
-3. Prompted to upload MOA          → Is doc? agent validates MOA
-   (same start screen, step 2):    → MOA digestion agent [Group 2, MVP stub]:
-   "One more document needed"          extracts: shareholders, directors,
-   Can upload now or skip to            signing authority, capital
-   Documents step later
+── STEP 02 — Find your business ────────────────────────────────────────────
 
-4. Sees pre-filled Business
-   Details screen — all 8 fields
-   from TL extraction shown.
-   Owners list shown read-only
-   (editing happens next screen).
-   Reviews and corrects if needed.
+2. Enters trade licence number     → KYB Service: DET/ADGM registry pull [MOCK]
+   Reviews consent screen              Returns: LLC name, activities, owners
+   Taps "I agree, continue"            list (multiple owners with % ownership),
+                                       address, expiry
+                                   → WWMA Service (parallel, ~60s):
+                                       Sanctions + PEP screening [MOCK]
+                                       AECB pre-check [MOCK]
+                                       KYB Score computed
+                                       IBAN reserved in pending_activation
 
-5. Answers 3 upfront questions:
-   - Main business activities (free text)
-   - Expected monthly turnover (range)
-   - Where will you transact? (regions)
-   ⚠ If "International" selected:
-     inline warning shown about EDD
+3. Pre-screen result:              → Tier shown: "Standard verification
+   ✓ Eligible — standard path         (~same day)"
+                                       Estimated T2FT: < 24 hours
 
-6. Shareholders screen:
-   Both owners pre-populated       → P2 KYC Service emits invitations
-   from TL extraction.                 for non-applicant owners
-   "Send KYC invite" per person    → PersonBusinessRole created per owner
-   Can add additional signatories
+── STEP 03 — Tell us about your business ───────────────────────────────────
 
-7. Reviews extracted ownership
-   structure: confirms or corrects
+4. Answers 3 mandatory questions:  → WWMA Service: CRAM computed → Medium
+   1. Primary business activity    → Tier 2 confirmed
+   2. Expected monthly turnover    → EDD trigger evaluated:
+   3. Source of funds                  standard sector → no extra questions
+                                   → FATCA/CRS: Active NFFE
+                                   → Plan recommendation generated
 
-9. For each owner / UBO:           → P2 KYC Service emits invitations
-   - UAE owner (same session):         for non-applicant owners
-     scans Emirates ID + liveness  → PersonBusinessRole created per owner
-   - Additional owners: sees
-     "We've invited [Name] to
-      complete their verification"
+── STEP 04 — Who needs access? ─────────────────────────────────────────────
 
-                                   ┌──────────────────────────────────────┐
-                                   │ P1 KYB:                              │
-                                   │   registry data from TL [MOCK]       │
-                                   │   MOA validated                      │
-                                   │   UBO graph built (flat, MVP)        │
-                                   │ P2 KYC:                              │
-                                   │   Applicant KYC verified             │
-                                   │   Awaiting co-owner verification     │
-                                   │ P3 Compliance:                       │
-                                   │   AML/PEP screened [MOCK]            │
-                                   │   CRAM score computed                │
-                                   │   EDD triggered if score ≥ threshold │
-                                   │ P4 Account:                          │
-                                   │   AECB checked [MOCK]                │
-                                   │   IBAN reserved in pending state     │
-                                   └──────────────────────────────────────┘
+5. Sees pre-populated UBO list     → KYB Service: ownership data from registry
+   from registry:                  → KYI Service: per-person CDD pipeline
+   · Owner A (applicant) — 60%         begins for each person
+   · Owner B — 40%
 
-10. Sees per-pillar progress        → KYC pillar status = awaiting_input
-    tracker with ETAs                   (waiting on co-owner)
+6. Applicant (Owner A) completes   → KYI Service:
+   their own KYI in session:           UAE Pass auth [MOCK]
+   · UAE Pass auth                     Liveness check (Onfido) [MOCK]
+   · Liveness check                    CPR created/matched (EID dedup)
+   · Reviews extracted details         AML/PEP/adverse media screening [MOCK]
+   · Confirms                      → PersonBusinessRole created for Owner A
+                                   → AuditEvent: signatory.completed
 
-── After co-owner completes their verification (see Flow 3) ──────────────
+7. For Owner B:                    → KYI Service: tokenised UAE Pass deep-link
+   "We've sent [Name] an invite       generated (signed JWT, short-lived,
+    to verify their identity."         bound to role + application)
+                                   → Push + bilingual SMS (AR/EN) sent
+                                   → AuditEvent: signatory.invited
 
-11. All pillars pass or flag        If any flag:
-                                   → Application enters back office queue
-                                   → CaseReview created, Maker assigned
-                                   → AuditEvent: case.maker_assigned
+8. Can add additional signatories  → KYI Service: additional invite per person
+   if needed                       → Signing rules captured (single / joint /
+                                       threshold-based)
 
-    If all pass (clean):
-                                   → Auto-approve path (same as Tier 1)
-                                   → Application status = approved
-                                   → Account flipped to active
+── STEP 05 — Track everything ──────────────────────────────────────────────
 
-12. On approval:
-    "Your Wio Business account
-     is ready."
-    Sees IBAN, plan recommendation → Plan shown post-approval, not before
-    Confirms or adjusts plan
+9. Sees 3-lane tracker with ETAs:  ┌────────────────────────────────────────┐
+   KYB  ████████████  ✓ Passed     │ KYB: Registry clean · UBO graph built  │
+   KYI  ████░░░░░░░░  Waiting...   │ KYI: Owner A verified                  │
+   Acct ████████░░░░  In progress  │      Owner B: invite sent              │
+                                   │ WWMA: IBAN reserved · AECB clear       │
+   Case Officer visible if         │       Awaiting KYI completion          │
+   assigned: "[Name], KYB Team"    └────────────────────────────────────────┘
+   In-app chat available
+
+── After Owner B completes their verification (see Flow 3) ──────────────────
+
+10. KYI pillar passes              → All 3 pillars pass (or one flags):
+                                   → If all pass (clean):
+                                       Auto-approve path → Step 06
+                                   → If any pillar flags:
+                                       Back office queue entry
+                                       Case Officer assigned
+                                       LLM triage drafts case summary
+
+── STEP 06 — Activate and move money ───────────────────────────────────────
+
+11. Prompted to e-sign:            → Same as Tier 1 Step 06
+    · FATCA/CRS self-cert          → Account activates, IBAN live
+    · Account Agreement + T&Cs    → T2FT recorded
+    Plan recommendation shown      → Plan confirmed at activation (not before)
 ```
 
 **Decision points:**
-- If EDD triggered: applicant receives sector-specific questionnaire before case goes to review
-- If MOA conflicts with TL data: P1 flags; Maker resolves in back office
-- If co-owner does not complete verification within SLA: ReAsk sent; escalation triggered on expiry
+- If EDD triggered at Step 03: customer sees sector questionnaire (Contentful CMS) before tracker
+- If MOA conflicts with TL data: KYB flags; Maker resolves in Unified Case Workspace
+- If Owner B does not complete within 72h: ReAsk sent; Orchestrator auto-escalates
+- If CRAM returns High: tier upgraded to Complex; specialist Case Officer assigned
 
 ---
 
-## Flow 3 — Signatory Self-Serve Verification
+## Flow 3 — Signatory Self-Serve Verification (KYI Pillar)
 
-**Who:** A co-owner, director, or authorized signatory who is not the main applicant.
-**Trigger:** Invitation sent by P2 KYC Service when their role is identified.
+**Who:** A co-owner, UBO, director, or authorized signatory who is not the main applicant.
+**Trigger:** Invitation sent by KYI Service when their role is identified at Step 04.
 **Platform:** Works on any device — the invitation link opens in browser (no app required).
 
 ```
@@ -230,85 +240,93 @@ Signatory                          System
     You've been added as [role].
     Complete your verification: [link]"
 
-2. Opens unique invitation link    → System validates token not expired
+2. Opens unique invitation link    → KYI Service validates token (signed JWT):
+                                       not expired · bound to this application
                                    → PersonBusinessRole.invitation_status
                                        = accepted
+                                   → AuditEvent: signatory.invited (if not
+                                       already recorded)
 
-3. Sees context:
+3. Sees context screen:
    "[Company Name] is applying for
     a Wio Business account. You are
     listed as [role].
     Here's what we need from you:"
 
-4. Scans Emirates ID or passport   → Personal Documents OCR agent
-                                   → UAE Pass auth [MOCK] (if UAE resident)
-                                       or passport + liveness (non-resident)
+4. UAE resident → UAE Pass auth    → KYI Service: UAE Pass OIDC [MOCK]
+                                       CPR matched or created
+   Non-UAE resident →               → Onfido passport scan + liveness [MOCK]
+   passport + liveness                 Nomad/IDfy remote attestation [MOCK]
+                                       Documental path shown upfront if
+                                       attestation unsupported (cost + SLA)
 
 5. Completes liveness check        → Liveness Adapter [MOCK]:
    (camera-based)                      liveness_passed = true
+                                       NIST PAD Level 2
 
-6. Reviews extracted details and   → Canonical Person Record created or
-   confirms                            matched to existing record
+6. Reviews extracted details       → CPR created or matched (EID dedup key)
+   and confirms                    → AML/PEP/adverse media screening [MOCK]
                                    → PersonBusinessRole.invitation_status
                                        = completed
                                    → AuditEvent: signatory.completed
 
-7. "You're all done. [Company]     → P2 KYC Service checks: all required
-    will hear from us soon."           signatories completed
-                                   → If all complete: pillar.kyc.passed
-                                   → Applicant notified of progress
-
+7. "You're all done. [Company]     → KYI Service checks: all required
+    will hear from us soon."           persons completed?
+                                   → If yes: pillar.kyi.passed event emitted
+                                   → Applicant notified of progress update
 ```
 
 **Decision points:**
-- If token expired: signatory sees expiry message; applicant notified to re-trigger invitation
-- If liveness fails: signatory can retry up to 3 times; after 3 failures, case flagged for human review
-- Non-UAE residents: passport + remote notarization path shown upfront with timeline (MVP: remote KYC only, notarization is manual)
+- Token expired: signatory sees expiry message; applicant notified to re-trigger invitation
+- Liveness fails 3× → case flagged for human review; not silently rejected
+- PEP or sanctions hit on signatory → hard stop; mandatory Compliance review; applicant not told the specific reason
 
 ---
 
-## Flow 4 — Back Office: Maker Review
+## Flow 4 — Back Office: Maker Review (Unified Case Workspace)
 
 **Who:** A Compliance Analyst assigned as Maker to a queued case.
-**Trigger:** Any pillar flags, or Tier 3 application submitted.
+**Trigger:** Any pillar flags, or Tier 3 application submitted, or sanctions/PEP hit.
 **Target:** Review completed in ≤ 20 minutes for Tier 2 cases.
+**Interface:** Unified Case Workspace — three-pillar view (KYB · KYI · WWMA) per case.
 
 ```
 Maker (Analyst)                    System / Agents
 ────────────────────────────────   ──────────────────────────────────
-1. Opens Back Office queue         → Queue shows: tier, TAT, SLA status,
-   Filters by: tier / SLA breach /     pillar flags, assigned cases
+1. Opens Unified Case Workspace    → Queue shows: tier, TAT, SLA status,
+   Filters by: tier / SLA breach /     pillar flags, assigned Case Officer
    unassigned
 
 2. Opens a case                    → CaseReview.status = maker_in_progress
                                    → AuditEvent: case.maker_started
 
-3. Sees AI Summary panel:          → Agent outputs surfaced per pillar:
-   ┌──────────────────────────┐       P1 KYB: ✓ Registry match · ⚠ MOA
-   │ [Business Name]          │           discrepancy on signatory
-   │ Tier: Standard           │       P2 KYC: ✓ Applicant · ✓ Co-owner
-   │ Submitted: 2h ago        │       P3 Compliance: ✓ AML · ⚠ PEP
-   │                          │           proximity flagged
-   │ P1 KYB    ⚠ 1 flag       │       P4 Account: ✓ AECB clear
-   │ P2 KYC    ✓ Passed       │
-   │ P3 Comp   ⚠ 1 flag       │
-   │ P4 Acct   ✓ Passed       │
-   │                          │
-   │ [View AI Reasoning]      │
+3. Sees AI Summary panel           → LLM triage pre-populated case summary:
+   (Anthropic Claude [MOCK]):         Entity name · jurisdiction · CRAM tier
+   ┌──────────────────────────┐      Screening hits · UBO structure
+   │ [Business Name]          │      Open questions · recommended treatment
+   │ Tier: Standard · CRAM: Med│
+   │ Submitted: 2h ago        │   → Agent outputs surfaced per pillar lane:
+   │                          │      KYB: ✓ Registry match
+   │ KYB    ✓ Passed          │           ⚠ MOA not yet uploaded
+   │ KYI    ⚠ 1 flag          │      KYI: ✓ Owner A verified
+   │ WWMA   ⚠ 1 flag          │           ⚠ Owner B — liveness retry 2/3
+   │                          │      WWMA: ✓ AECB clear
+   │ [View AI Reasoning]      │            ⚠ PEP proximity flagged
    └──────────────────────────┘
 
 4. Reviews each flagged item:
-   - Expands flag detail: "MOA
-     signatory [Name] not on TL"
-   - Reviews document side-by-side
-   - Sees agent reasoning and
+   - Expands flag detail: "Owner B
+     liveness retry 2 of 3"
+   - Reviews liveness video (if
+     applicable) + OCR output
+   - Sees agent reasoning +
      confidence score
 
 5a. If resolvable:
     Maker marks flag as reviewed:
-    "Discrepancy explained — MOA
-     pre-dates TL renewal"
-    Records note
+    "Retry 2 accepted — face match
+     within threshold"
+    Records mandatory note
 
 5b. If missing info needed:
     Maker opens Re-Ask panel        → ReAsk created, status = pending
@@ -326,10 +344,10 @@ Maker (Analyst)                    System / Agents
 7. Confirms submission             → Checker notified
 ```
 
-**Decision points:**
-- Maker cannot approve — they can only recommend; final approval requires Checker
-- If Maker marks a flag as reviewed without explanation, system prompts for mandatory note
-- EDD cases: Maker reviews EDD Q&A before making recommendation; EDD Maker agent (Group 2) pre-populates this in later phases
+**Compliance constraints:**
+- LLM triage summary is advisory only — Maker must review underlying evidence
+- PEP case → mandatory Compliance Manager escalation, cannot be approved by Maker/Checker alone
+- Sanctions match → mandatory MLRO review; STR filed by MLRO; no tipping off in any customer-facing communication
 
 ---
 
@@ -345,27 +363,30 @@ Checker (Analyst)                  System
 1. Notified: "Case [ID] is ready
    for your review"
 
-2. Opens case — sees:
+2. Opens case — sees diff view:
    ┌──────────────────────────┐
    │ Maker: [Name]            │
-   │ Maker decision: Approve  │
-   │ Maker reason: [text]     │
+   │ Decision: Recommend Appr.│
+   │ Reason: [text]           │
    │                          │
    │ What Maker reviewed:     │
-   │ ✓ MOA flag resolved      │
+   │ ✓ KYI flag resolved      │
    │   Note: [text]           │
-   │ ✓ PEP proximity reviewed │
+   │ ✓ WWMA PEP proximity     │
    │   Note: [text]           │
    └──────────────────────────┘
-   Full AI summary and documents
-   also available
+   Full AI summary + 3-pillar
+   view also available
 
 3. Checker reviews Maker's work
    and the underlying evidence
+   (A Checker cannot review a
+   case they were the Maker on —
+   enforced at API level)
 
 4. Selects decision:               → If Approve:
    ○ Approve                           Application status = approved
-   ○ Override — Decline                Account flipped to active
+   ○ Override — Decline                WWMA Service: activation triggered
    ○ Override — Escalate               AuditEvent: case.approved
    Mandatory: enters reason text       Applicant notified
                                    → If Override:
@@ -373,20 +394,20 @@ Checker (Analyst)                  System
                                        Decision + reason logged
                                        Applicant notified accordingly
                                    → If Escalate:
-                                       Escalated to Compliance Manager
+                                       Escalated to Compliance Manager / MLRO
                                        AuditEvent: case.escalated
 ```
 
 **Decision points:**
-- Checker override requires a more detailed reason (character minimum enforced)
+- Override requires a more detailed reason (character minimum enforced)
 - Escalation routes to Compliance Manager queue with full case history
-- A Checker cannot review a case they were the Maker on (enforced at API level)
+- EDD finalisation (high-risk sector) requires Senior Management sign-off — escalation is mandatory
 
 ---
 
 ## Flow 6 — Re-Ask Response (Applicant)
 
-**Who:** An applicant who has received a targeted re-ask for missing or inconsistent information.
+**Who:** An applicant who received a targeted re-ask for missing or inconsistent information.
 **Trigger:** ReAsk created by Maker or Re-ask Agent.
 
 ```
@@ -412,33 +433,32 @@ Applicant                          System
 
 3. Uploads requested document      → Document Service stores upload
                                    → Is doc? agent validates
-                                   → Affected agents re-run
+                                   → Affected agents re-run automatically
                                    → AuditEvent: reask.responded
 
 4. "Thanks — we've received
     your document and are
     reviewing it."
-   Returns to status tracker
-
+   Returns to Step 05 tracker
                                    → If re-run resolves the flag:
                                        PillarStatus updated
                                        ReAsk.status = resolved
-                                       Maker/Queue notified of delta
+                                       Maker/Queue notified of delta only
                                    → If flag persists:
                                        Case returned to Maker for decision
 ```
 
-**Decision points:**
-- Only one open ReAsk at a time; multiple outstanding items are batched
-- If applicant does not respond within SLA: escalation triggered; applicant re-notified at 7-day warning
-- Applicant can add a clarification note alongside the document upload
+**Constraints:**
+- Only one open ReAsk at a time; multiple items batched into a single ReAsk
+- If applicant does not respond within SLA: Orchestrator triggers escalation; re-notification at 7-day warning
+- Per-field expiry (OPA/Rego): only genuinely perishable data (PoA >90d, stale AML refresh) requires re-entry — never the whole application
 
 ---
 
 ## Flow 7 — Auditor: Audit Trail Access
 
-**Who:** An internal auditor or Compliance Manager running a case review or regulatory check.
-**Access:** Read-only. Cannot modify any record.
+**Who:** An internal auditor or Compliance Manager running a regulatory check.
+**Access:** Read-only. Cannot modify any record. Access itself is logged.
 
 ```
 Auditor                            System
@@ -446,53 +466,54 @@ Auditor                            System
 1. Logs into Back Office with
    auditor role
 
-2. Searches for a case by:         → Query against Audit Event Store
+2. Searches for a case by:         → Query against Audit/Event Store
    - Application ID                → AuditEvent: audit.log_accessed
    - Business name                    (access itself is logged)
    - Date range
-   - Applicant name
+   - Applicant name / EID
 
 3. Opens case audit view:
-   ┌──────────────────────────────────────────────────────┐
-   │ Application: [ID]  Business: [Name]  Tier: Standard  │
-   ├──────────────────────────────────────────────────────┤
-   │ 2026-05-01 09:12  system          application.created │
-   │ 2026-05-01 09:12  system          application.tier_assigned: standard │
-   │ 2026-05-01 09:13  applicant/[ID]  document.uploaded: trade_license    │
-   │ 2026-05-01 09:13  agent/is_doc    agent.run.completed: pass           │
-   │ 2026-05-01 09:14  agent/tl_proc   agent.run.completed: pass           │
-   │ 2026-05-01 09:15  agent/biz_act   agent.run.completed: flag           │
-   │   └─ payload: { activity: "real_estate", risk: "high" }               │
-   │ 2026-05-01 10:30  analyst/[ID]    case.maker_started                  │
-   │ 2026-05-01 10:48  analyst/[ID]    reask.sent                          │
-   │   └─ payload: { items: [{ field: "board_resolution", ... }] }         │
-   │ 2026-05-01 14:02  applicant/[ID]  reask.responded                     │
-   │ 2026-05-01 14:04  agent/is_doc    agent.run.completed: pass           │
-   │ 2026-05-01 14:30  analyst/[ID]    case.maker_completed: recommend_approve │
-   │   └─ payload: { reason: "..." }                                        │
-   │ 2026-05-01 15:12  analyst/[ID2]   case.approved                       │
-   │   └─ payload: { reason: "..." }                                        │
-   │ 2026-05-01 15:12  system          pillar.account.activated             │
-   └──────────────────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────────┐
+   │ Application: [ID]  Business: [Name]  Tier: Standard          │
+   ├──────────────────────────────────────────────────────────────┤
+   │ 2026-05-01 09:10  system          auth.uae_pass.completed     │
+   │ 2026-05-01 09:11  system          application.pre_screen.eligible │
+   │ 2026-05-01 09:11  system          pillar.wwma.iban_reserved   │
+   │ 2026-05-01 09:13  system          application.created         │
+   │ 2026-05-01 09:14  system          application.cram_computed:  │
+   │   └─ payload: { score: "medium", tier: "standard",           │
+   │                 policy_version: "cram-v2.1.0" }              │
+   │ 2026-05-01 09:14  agent/tl_proc   agent.run.completed: pass   │
+   │ 2026-05-01 10:30  applicant/[EID] pillar.kyi.started          │
+   │ 2026-05-01 10:48  kyi_service     signatory.invited           │
+   │ 2026-05-01 14:02  signatory/[EID] signatory.completed         │
+   │ 2026-05-01 14:30  analyst/[ID]    case.maker_completed:       │
+   │   └─ payload: { decision: "recommend_approve", reason: "..." }│
+   │ 2026-05-01 15:12  analyst/[ID2]   case.approved               │
+   │ 2026-05-01 15:12  system          pillar.wwma.account_activated│
+   └──────────────────────────────────────────────────────────────┘
 
 4. Filters events by:
-   - Pillar
+   - Pillar (kyb · kyi · wwma)
    - Actor (system / agent / analyst / applicant)
    - Event type
    - Date range
 
 5. Expands any event to see
    full payload snapshot
+   (self-contained; does not
+   depend on current record state)
 
 6. Exports audit log               → JSON or CSV export generated
    [Export JSON] [Export CSV]      → AuditEvent: audit.log_exported
-                                       (export action itself is logged)
+                                       (export itself logged)
 ```
 
 **Guarantees:**
-- Every event in the log is immutable — no event can be modified or deleted after write
-- The full state of any application at any past moment is reconstructable by replaying events in order
-- The auditor's own access and export actions are themselves logged as AuditEvents
+- Every event in the log is immutable — no UPDATE or DELETE at the database level
+- Full application state at any past moment reconstructable by replaying events in `created_at` order
+- CRAM decisions pinned to `policy_version` — "which rule version applied to customer X on date Y" answerable in seconds
+- Auditor's own access and export actions are themselves logged as AuditEvents
 
 ---
 
@@ -500,19 +521,19 @@ Auditor                            System
 
 ```
                     ┌─────────┐
-                    │  draft  │  (created, not yet submitted)
+                    │  draft  │  (created after pre-screen eligible)
                     └────┬────┘
-                         │ applicant confirms
+                         │ customer completes Step 03 CDD answers
                          ▼
                   ┌─────────────┐
-                  │ in_progress │  (pillars running)
+                  │ in_progress │  (pillars running in parallel)
                   └──────┬──────┘
-                         │ all pillars complete
+                         │ all pillars complete or any flag
               ┌──────────┴────────────┐
-              │ all pass              │ any flag
+              │ all pass              │ any pillar flags
               ▼                       ▼
          ┌──────────┐        ┌──────────────────┐
-         │ approved │        │  pending_review   │  (enters back office queue)
+         │ approved │        │  pending_review   │  (Unified Case Workspace)
          └──────────┘        └────────┬─────────┘
                                       │ Maker → Checker
                              ┌────────┴─────────┐
@@ -523,5 +544,7 @@ Auditor                            System
                         └──────────┘      └──────────┘
                              │                  │
                              ▼                  ▼
-                    account activated     applicant notified
+                 WWMA activation flip    Applicant notified
+                 T2FT timestamp set      (no tipping off on
+                 (Step 06 complete)       sanctions reason)
 ```

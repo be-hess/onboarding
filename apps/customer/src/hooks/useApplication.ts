@@ -1,17 +1,15 @@
 import { useNavigate } from 'react-router-dom'
 import { useApplicationContext } from '../store'
-import { scanDocument, generateBusinessModelSummary, submitApplication, watchPillarProgress } from '../services'
-import type { WizardStep, DocumentKind } from '../store/types'
+import { authenticateUaePass, runPreScreen, computeCram, submitApplication, watchPillarProgress } from '../services/mockApi'
+import type { WizardStep } from '../store/types'
 
 const STEP_ROUTES: Record<WizardStep, string> = {
-  start: '/',
-  license: '/application/license',
-  activities: '/application/activities',
-  ownership: '/application/ownership',
-  'business-model': '/application/business-model',
-  documents: '/application/documents',
-  review: '/application/review',
-  status: '/application/status',
+  'uae-pass': '/',
+  'find-business': '/application/find-business',
+  'business-questions': '/application/business-questions',
+  'who-needs-access': '/application/who-needs-access',
+  'tracker': '/application/tracker',
+  'activate': '/application/activate',
 }
 
 export function useApplication() {
@@ -23,50 +21,44 @@ export function useApplication() {
     navigate(STEP_ROUTES[step])
   }
 
-  async function handleDocumentScan(file: File | undefined, documentKind: DocumentKind): Promise<{ requiresMoa: boolean }> {
-    dispatch({ type: 'SET_DOCUMENT_KIND', documentKind })
-    dispatch({ type: 'SET_TL_SCANNED' })
+  async function handleUaePassAuth() {
     dispatch({ type: 'SET_ERROR', error: null })
     try {
-      const { business, tier, requiresMoa } = await scanDocument(file, documentKind)
-      dispatch({ type: 'SET_EXTRACTED_BUSINESS', business, tier, requiresMoa })
-      business.owners.forEach((owner, i) => {
-        dispatch({
-          type: 'ADD_SHAREHOLDER',
-          shareholder: {
-            id: `p-extracted-${i}`,
-            fullName: owner.name,
-            role: 'owner',
-            ownership: owner.ownership,
-            nationality: owner.nationality ?? '',
-            kycStatus: 'pending',
-          },
-        })
-      })
-      return { requiresMoa }
+      const result = await authenticateUaePass()
+      dispatch({ type: 'SET_UAE_PASS_VERIFIED', name: result.fullNameEn })
+      goTo('find-business')
     } catch {
-      dispatch({ type: 'SET_ERROR', error: 'Could not read the document. Please try again with a clearer image.' })
-      return { requiresMoa: false }
+      dispatch({ type: 'SET_ERROR', error: 'UAE Pass authentication failed. Please try again.' })
     }
   }
 
-  function handleMoaUpload(fileName: string) {
-    dispatch({ type: 'UPDATE_DOCUMENT_STATUS', id: 'moa', status: 'uploaded', fileName })
+  async function handlePreScreen(licenseNumber: string) {
+    dispatch({ type: 'SET_LICENSE_NUMBER', value: licenseNumber })
+    dispatch({ type: 'SET_PRE_SCREEN_LOADING', loading: true })
+    try {
+      const result = await runPreScreen(licenseNumber)
+      dispatch({
+        type: 'SET_PRE_SCREEN_RESULT',
+        result: result.result,
+        business: result.business,
+        tier: result.tier,
+      })
+    } catch {
+      dispatch({ type: 'SET_PRE_SCREEN_LOADING', loading: false })
+      dispatch({ type: 'SET_ERROR', error: 'Could not look up this license number. Please check and try again.' })
+    }
   }
 
-  // Called when entering the Business Model screen — generates the AI summary if not already done
-  async function loadBusinessModelSummary() {
-    if (!state.business || state.businessModelSummary || state.businessModelLoading) return
-    dispatch({ type: 'SET_BUSINESS_MODEL_LOADING', loading: true })
+  async function handleCramCompute() {
+    const { primaryActivity, expectedMonthlyTurnover, sourceOfFunds } = state
+    dispatch({ type: 'SET_ERROR', error: null })
     try {
-      const summary = await generateBusinessModelSummary(
-        state.business,
-        state.activities,
-        state.primaryActivityIndex
-      )
-      dispatch({ type: 'SET_BUSINESS_MODEL_SUMMARY', summary })
+      const result = await computeCram(primaryActivity, expectedMonthlyTurnover, sourceOfFunds)
+      dispatch({ type: 'SET_CRAM_RESULT', score: result.score, eddTriggered: result.eddTriggered })
+      return result
     } catch {
-      dispatch({ type: 'SET_BUSINESS_MODEL_LOADING', loading: false })
+      dispatch({ type: 'SET_ERROR', error: 'Risk assessment failed. Please try again.' })
+      return null
     }
   }
 
@@ -75,7 +67,7 @@ export function useApplication() {
     try {
       const { applicationId } = await submitApplication({ state })
       dispatch({ type: 'SET_SUBMITTED', applicationId })
-      goTo('status')
+      goTo('tracker')
       setTimeout(() => runPillarSimulation(applicationId), 500)
     } catch {
       dispatch({ type: 'SET_ERROR', error: 'Submission failed. Please try again.' })
@@ -94,9 +86,9 @@ export function useApplication() {
     state,
     dispatch,
     goTo,
-    handleDocumentScan,
-    handleMoaUpload,
-    loadBusinessModelSummary,
+    handleUaePassAuth,
+    handlePreScreen,
+    handleCramCompute,
     handleSubmit,
   }
 }
