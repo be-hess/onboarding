@@ -31,15 +31,16 @@ The north-star outcome: transform onboarding from a bottleneck into a growth eng
 
 ---
 
-## Architecture: Three-Pillar Platform
+## Architecture: Four-Pillar Platform
 
-Every application progresses across three independent service pillars that run **in parallel** once the customer passes the pre-screen. A Pillar Orchestrator (Temporal / AWS Step Functions) coordinates gate dependencies and SLA enforcement. Pillars communicate via the shared event bus — they never call each other directly and a bottleneck in one cannot freeze the others.
+Every application progresses across four independent service pillars that run **in parallel** once the customer passes the pre-screen. A Pillar Orchestrator (Temporal / AWS Step Functions) coordinates gate dependencies and SLA enforcement. Pillars communicate via the shared event bus — they never call each other directly and a bottleneck in one cannot freeze the others.
 
 | Pillar | Abbreviation | Scope |
 |---|---|---|
-| **Know Your Business** | KYB | Entity verification — trade licence pulled from UAE registry, UBO graph traversal (≥25% direct + indirect), sector/jurisdiction classification, continuous KYB score. Registry-first; document upload is a fallback for unsupported jurisdictions only. |
-| **Know Your Individual** | KYI | People verification — owner, all UBOs ≥25%, signatories, directors. UAE Pass OIDC for UAE residents; Onfido remote liveness (NIST PAD Level 2) + Nomad/IDfy remote attestation for non-UAE individuals. Canonical Person Record: one record per natural person reused across all roles. |
-| **Who Will Manage the Account** | WWMA | Risk/compliance and account provisioning. CRAM (OPA/Rego policy-as-code) → Low / Medium / High. EDD scoping and questionnaire. AML/PEP/adverse media screening. AECB credit pre-check. FATCA/CRS classification. IBAN pre-reservation and async account provisioning in `pending_activation` state from Step 02. Activation = state flip once all pillars clear. |
+| **Know Your Business** | KYB | Entity verification — trade licence pulled from UAE registry, UBO graph traversal (≥25% direct + indirect), sector/jurisdiction classification, continuous KYB score. CRAM scoring (OPA/Rego policy-as-code) → Low / Medium / High customer risk rating, pinned to policy version ID. EDD trigger evaluation and questionnaire delivery (sector + turnover + jurisdiction rules). Registry-first; document upload is a fallback for unsupported jurisdictions only. |
+| **Know Your Individual** | KYI | People verification — owner, all UBOs ≥25%, signatories, directors. UAE Pass OIDC for UAE residents; Onfido remote liveness (NIST PAD Level 2) + Nomad/IDfy remote attestation for non-UAE individuals. Canonical Person Record: one record per natural person reused across all roles. AML/PEP/adverse media screening per individual (FATF Rec. 12). AECB pre-check per individual (explicit consent, Federal Law 6/2010). FATCA/CRS classification auto-derived from individual and entity structure. |
+| **Who Will Manage the Account** | WWMA | Mandate configuration — who has the power to open and operate the account, at what level, and under what conditions. Covers: signing authority type (sole, joint, threshold-based), access levels per person (full mandate, limited mandate, authorized user, read-only), power of attorney validation, and the complete mandate policy stored as configuration. Drawn from the KYI-verified signatory list and MOA signing rules. |
+| **Account Setup** | ACCT | Product selection and commercial configuration. Product fit recommendation (CRAM tier + AECB + turnover cohort). Customer confirms plan; fee schedule bound at selection (KFS generated before signing). IBAN pre-reservation from CBUAE-allocated block; account provisioned in `pending_activation` state from Step 02. Virtual card personalised, cheque book template generated. Payment rails enabled per plan. Account Agreement, KFS, T&Cs, and FATCA/CRS self-certs e-signed via UAE Pass (Federal Decree-Law 46/2021). Activation = state flip `pending_activation → active` once all pillars clear. |
 
 ---
 
